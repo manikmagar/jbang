@@ -3,6 +3,7 @@ package dk.xam.jbang;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -73,7 +74,7 @@ class DependencyResolverTest {
 
 		List<String> deps = Arrays.asList("com.offbytwo:docopt:0.6.0.20150202", "log4j:log4j:1.2+");
 
-		List<Artifact> artifacts = dr.resolveDependenciesViaAether(deps, Collections.emptyList(), true);
+		List<File> artifacts = dr.resolveDependenciesViaAether(deps, Collections.emptyList(), true);
 
 		assertEquals(5, artifacts.size());
 
