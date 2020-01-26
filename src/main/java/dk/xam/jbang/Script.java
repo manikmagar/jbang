@@ -81,6 +81,10 @@ public class Script {
 		return matchList;
 	}
 
+	public List<String> collectFriends() {
+		return collectOptions("FRIENDS");
+	}
+
 	private List<String> collectOptions(String prefix) {
 		String joptsPrefix = "//" + prefix;
 

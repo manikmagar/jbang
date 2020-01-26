@@ -17,6 +17,7 @@ class TestScript {
 			+ "//JAVA_OPTIONS --enable-preview \"-Dvalue='this is space'\"\n"
 			+ "//JAVAC_OPTIONS --enable-preview\n"
 			+ "//JAVAC_OPTIONS --verbose \n"
+			+ "//FRIENDS Other.java Third.java \n"
 			+ "class classpath_example {\n" + "\n"
 			+ "\tString usage = \"jbang  - Enhanced scripting support for Java on *nix-based systems.\\n\" + \"\\n\" + \"Usage:\\n\"\n"
 			+ "\t\t\t+ \"    jbang ( -t | --text ) <version>\\n\"\n"
@@ -71,4 +72,11 @@ class TestScript {
 
 	}
 
+	@Test
+	void testExtractFriends() {
+		Script s = new Script(example);
+
+		assertEquals(s.collectFriends(), Arrays.asList("Other.java", "Third.java"));
+
+	}
 }
