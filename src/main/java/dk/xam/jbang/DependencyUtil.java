@@ -13,10 +13,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.DefaultArtifact;
 import org.jboss.shrinkwrap.resolver.api.maven.ConfigurableMavenResolverSystem;
 import org.jboss.shrinkwrap.resolver.api.maven.Maven;
-import org.sonatype.aether.artifact.Artifact;
-import org.sonatype.aether.util.artifact.DefaultArtifact;
 
 class DependencyUtil {
 
@@ -169,9 +169,13 @@ class DependencyUtil {
 		String classifier = gav.group("classifier");
 		String type = Optional.ofNullable(gav.group("type")).orElse("jar");
 
-		// String groupId, String artifactId, String classifier, String extension,
+		// old: String groupId, String artifactId, String classifier, String extension,
 		// String version
-		return new DefaultArtifact(groupId, artifactId, classifier, type, version);
+		// mvn.aether: String groupId, String artifactId, String version, String scope,
+		// String type,
+		// String classifier, ArtifactHandler artifactHandler )
+
+		return new DefaultArtifact(groupId, artifactId, version, "", type, classifier, null);
 	}
 
 	public String formatVersion(String version) {

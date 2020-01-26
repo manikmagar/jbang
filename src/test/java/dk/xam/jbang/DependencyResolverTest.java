@@ -8,10 +8,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.maven.artifact.Artifact;
 import org.junit.Rule;
 import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.Test;
-import org.sonatype.aether.artifact.Artifact;
 
 class DependencyResolverTest {
 
@@ -34,21 +34,21 @@ class DependencyResolverTest {
 		assertEquals("docopt", artifact.getArtifactId());
 		assertEquals("0.6.0.20150202", artifact.getVersion());
 		assertEquals("redhat", artifact.getClassifier());
-		assertEquals("doc", artifact.getExtension());
+		assertEquals("doc", artifact.getType());
 
 		artifact = dr.depIdToArtifact("com.offbytwo:docopt:0.6.0.20150202");
 		assertEquals("com.offbytwo", artifact.getGroupId());
 		assertEquals("docopt", artifact.getArtifactId());
 		assertEquals("0.6.0.20150202", artifact.getVersion());
 		assertEquals("", artifact.getClassifier());
-		assertEquals("jar", artifact.getExtension());
+		assertEquals("jar", artifact.getType());
 
 		artifact = dr.depIdToArtifact("com.offbytwo:docopt:0.6+");
 		assertEquals("com.offbytwo", artifact.getGroupId());
 		assertEquals("docopt", artifact.getArtifactId());
 		assertEquals("[0.6,)", artifact.getVersion());
 		assertEquals("", artifact.getClassifier());
-		assertEquals("jar", artifact.getExtension());
+		assertEquals("jar", artifact.getType());
 
 		assertThrows(IllegalStateException.class, () -> dr.depIdToArtifact("bla?f"));
 	}
