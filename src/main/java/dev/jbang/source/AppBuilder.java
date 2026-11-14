@@ -4,6 +4,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import dev.jbang.source.buildsteps.IntegrationBuildStep;
 import dev.jbang.source.buildsteps.JarBuildStep;
 import dev.jbang.source.buildsteps.NativeBuildStep;
 import dev.jbang.spi.IntegrationResult;
@@ -18,14 +19,14 @@ import dev.jbang.util.*;
  * The steps it performs are called "build steps" and the most common ones are
  * (in order): "compile", "integration", "jar" and "native".
  */
-public abstract class AppBuilder implements Builder<Project> {
-	protected final Project project;
+public abstract class AppBuilder implements Builder<CmdGeneratorBuilder> {
+	protected final BuildContext ctx;
 
 	protected boolean fresh = Util.isFresh();
 	protected Util.Shell shell = Util.getShell();
 
-	public AppBuilder(Project project) {
-		this.project = project;
+	public AppBuilder(BuildContext ctx) {
+		this.ctx = ctx;
 	}
 
 	public AppBuilder setFresh(boolean fresh) {
@@ -39,33 +40,43 @@ public abstract class AppBuilder implements Builder<Project> {
 	}
 
 	@Override
-	public Project build() throws IOException {
-		Path outjar = project.getJarFile();
-		boolean nativeBuildRequired = project.isNativeImage() && !Files.exists(project.getNativeImageFile());
+	public CmdGeneratorBuilder build() throws IOException {
+		Project project = ctx.getProject();
+		Path outjar = ctx.getJarFile();
+		boolean nativeBuildRequired = project.isNativeImage() && (!Files.exists(ctx.getNativeImageFile()) || fresh);
 		IntegrationResult integrationResult = new IntegrationResult(null, null, null);
 		String requestedJavaVersion = project.getJavaVersion();
 		// always build the jar for native mode
 		// it allows integrations the options to produce the native image
 		boolean buildRequired = true;
-		if (project.isJar()) {
-			Util.verboseMsg("The resource is a jar, no compilation to be done.");
+		if (project.isExecutableArchive()) {
+			Util.verboseMsg("The resource is an executable archive, no compilation to be done.");
 			buildRequired = false;
 		} else if (fresh) {
 			Util.verboseMsg("Building as fresh build explicitly requested.");
 		} else if (nativeBuildRequired) {
 			Util.verboseMsg("Building as native build required.");
 		} else if (Files.isReadable(outjar)) {
+			Project jarProject = Project.builder().build(outjar);
 			// We already have a Jar, check if we can still use it
-			if (!project.isUpToDate()) {
-				Util.verboseMsg("Building as previous build jar found but it or its dependencies not up-to-date.");
-			} else if (JavaUtil.javaVersion(requestedJavaVersion) < JavaUtil.minRequestedVersion(
-					project.getJavaVersion())) {
+			if (!ctx.isUpToDate()) {
+				Util.verboseMsg("Building as previously built jar found but it or its dependencies not up-to-date.");
+			} else if (jarProject.getJavaVersion() == null) {
+				Util.verboseMsg("Building as previously built jar found but it has incomplete meta data.");
+			} else if (project.projectJdk().majorVersion() < JavaUtil.minRequestedVersion(
+					jarProject.getJavaVersion())) {
 				Util.verboseMsg(
 						String.format(
 								"Building as requested Java version %s < than the java version used during last build %s",
 								requestedJavaVersion, project.getJavaVersion()));
 			} else {
-				Util.verboseMsg("No build required. Reusing jar from " + project.getJarFile());
+				if (project.getMainClass() == null) {
+					project.setMainClass(jarProject.getMainClass());
+				}
+				if (!project.getModuleName().isPresent()) {
+					project.setModuleName(jarProject.getModuleName().orElse(null));
+				}
+				Util.verboseMsg("No build required. Reusing jar from " + ctx.getJarFile());
 				buildRequired = false;
 			}
 		} else {
@@ -73,36 +84,41 @@ public abstract class AppBuilder implements Builder<Project> {
 		}
 
 		if (buildRequired) {
-			// set up temporary folder for compilation
-			Path compileDir = project.getBuildDir();
+			// set up temporary folders for compilation
+			Path compileDir = ctx.getCompileDir();
 			Util.deletePath(compileDir, true);
 			compileDir.toFile().mkdirs();
+			Path generatedDir = ctx.getGeneratedSourcesDir();
+			Util.deletePath(generatedDir, true);
+			generatedDir.toFile().mkdirs();
+
 			// do the actual building
 			try {
 				getCompileBuildStep().build();
-				integrationResult = getIntegrationBuildStep().build();
+				if (!project.disableIntegrations()) {
+					integrationResult = getIntegrationBuildStep().build();
+				}
 				getJarBuildStep().build();
 			} finally {
 				if (!keepClasses()) {
-					// clean up temporary folder
+					// clean up temporary folders
 					Util.deletePath(compileDir, true);
+					Util.deletePath(generatedDir, true);
 				}
 			}
 		}
 
 		if (nativeBuildRequired) {
 			if (integrationResult.nativeImagePath != null) {
-				Files.move(integrationResult.nativeImagePath, project.getNativeImageFile());
+				Files.move(integrationResult.nativeImagePath, ctx.getNativeImageFile());
 			} else {
 				getNativeBuildStep().build();
 			}
 		}
 
-		for (Project aprj : project.getJavaAgents()) {
-			aprj.builder().build();
-		}
-
-		return project;
+		return CmdGenerator.builder(ctx)
+			.mainClass(project.getMainClass())
+			.moduleName(project.getModuleName().orElse(null));
 	}
 
 	public static boolean keepClasses() {
@@ -111,13 +127,15 @@ public abstract class AppBuilder implements Builder<Project> {
 
 	protected abstract Builder<Project> getCompileBuildStep();
 
-	protected abstract Builder<IntegrationResult> getIntegrationBuildStep();
+	protected Builder<IntegrationResult> getIntegrationBuildStep() {
+		return new IntegrationBuildStep(ctx);
+	}
 
 	protected Builder<Project> getJarBuildStep() {
-		return new JarBuildStep(project);
+		return new JarBuildStep(ctx);
 	}
 
 	protected Builder<Project> getNativeBuildStep() {
-		return new NativeBuildStep(project);
+		return new NativeBuildStep(ctx);
 	}
 }

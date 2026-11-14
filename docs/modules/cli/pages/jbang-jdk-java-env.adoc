@@ -1,67 +1,68 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-jdk-java-env(1)
+= JBANG JDK JAVA-ENV
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang jdk java-env -- Prints out the environment variables needed to use the given JDK.
 
-jbang-jdk-java-env - Prints out the environment variables needed to use the given JDK.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang jdk java-env [OPTIONS] [<versionOrId>]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Prints the shell commands that put a jbang-managed JDK on PATH and set
+JAVA_HOME. Evaluate the output to use that JDK in your current shell.
 
-*jbang jdk java-env* *-o* *--fresh* *--quiet* *--verbose* [_version_]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+eval $(jbang jdk java-env 21)
+jbang jdk java-env 21
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Prints out the environment variables needed to use the given JDK.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*-h*, *--help*::
+Display this help and exit
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-[_version_]::
-  The version of the JDK to select
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// end::picocli-generated-man-section-arguments[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+== ARGUMENTS
 
-// end::picocli-generated-full-manpage[]
+*<versionOrId>*::
+The version of the JDK to select
+

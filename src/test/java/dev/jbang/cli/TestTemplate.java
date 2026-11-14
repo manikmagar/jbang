@@ -3,11 +3,7 @@ package dev.jbang.cli;
 import static dev.jbang.util.TestUtil.clearSettingsCaches;
 import static dev.jbang.util.Util.entry;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.aMapWithSize;
-import static org.hamcrest.Matchers.hasItems;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,13 +14,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import dev.jbang.BaseTest;
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.catalog.Catalog;
 import dev.jbang.catalog.Template;
 import dev.jbang.catalog.TemplateProperty;
 import dev.jbang.util.Util;
-
-import picocli.CommandLine;
 
 public class TestTemplate extends BaseTest {
 
@@ -70,7 +65,7 @@ public class TestTemplate extends BaseTest {
 			"}";
 
 	@BeforeEach
-	void init() throws IOException {
+	void initEach() throws IOException {
 		Files.write(jbangTempDir.resolve(Catalog.JBANG_CATALOG_JSON), templates.getBytes());
 		Util.setCwd(Files.createDirectory(cwdDir.resolve("test")));
 	}
@@ -92,8 +87,7 @@ public class TestTemplate extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("template", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)),
 				is(true));
 		Template name = Template.get("name");
@@ -108,9 +102,8 @@ public class TestTemplate extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(), "--name=name",
-				"-d", "Description of the template", testFile.toString());
+		JBang.execute("template", "add", "-f", cwd.toString(), "--name=name",
+				"--description", "Description of the template", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)),
 				is(true));
 		Template name = Template.get("name");
@@ -125,8 +118,7 @@ public class TestTemplate extends BaseTest {
 		Path hiddenJBangPath = Paths.get(cwd.toString(), Settings.JBANG_DOT_DIR);
 		Files.createDirectory(hiddenJBangPath);
 		Files.createFile(Paths.get(cwd.toString(), Settings.JBANG_DOT_DIR, Catalog.JBANG_CATALOG_JSON));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("template", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
 		Catalog catalog = Catalog.get(hiddenJBangPath);
 		Template name = catalog.templates.get("name");
@@ -140,8 +132,7 @@ public class TestTemplate extends BaseTest {
 		Path cwd = Util.getCwd();
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(), "--name=name",
+		JBang.execute("template", "add", "-f", cwd.toString(), "--name=name",
 				testFile.toString());
 		Template one = Template.get("one");
 		Template name = Template.get("name");
@@ -151,6 +142,33 @@ public class TestTemplate extends BaseTest {
 		assertThat(name.fileRefs, aMapWithSize(1));
 		assertThat(name.fileRefs.keySet(), hasItems("{basename}.java"));
 		assertThat(name.fileRefs.values(), hasItems("test.java"));
+	}
+
+	@Test
+	void testAddExisting() throws IOException {
+		Path cwd = Util.getCwd();
+		Path testFile = cwd.resolve("test.java");
+		Files.write(testFile, "// Test file".getBytes());
+		Path testFile2 = cwd.resolve("test2.java");
+		Files.write(testFile2, "// Test file 2".getBytes());
+		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
+		int exitCode = JBang.execute("template", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		assertThat(exitCode, equalTo(ExitException.EXIT_OK));
+		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)),
+				is(true));
+		Template name = Template.get("name");
+		assertThat(name.fileRefs, aMapWithSize(1));
+		assertThat(name.fileRefs.keySet(), hasItems("{basename}.java"));
+		assertThat(name.fileRefs.values(), hasItems("test.java"));
+		exitCode = JBang.execute("template", "add", "-f", cwd.toString(), "--name=name", testFile2.toString());
+		assertThat(exitCode, equalTo(ExitException.EXIT_INVALID_INPUT));
+		exitCode = JBang.execute("template", "add", "-f", cwd.toString(), "--name=name", "--force",
+				testFile2.toString());
+		assertThat(exitCode, equalTo(ExitException.EXIT_OK));
+		name = Template.get("name");
+		assertThat(name.fileRefs, aMapWithSize(1));
+		assertThat(name.fileRefs.keySet(), hasItems("{basename}.java"));
+		assertThat(name.fileRefs.values(), hasItems("test2.java"));
 	}
 
 	@Test
@@ -200,9 +218,8 @@ public class TestTemplate extends BaseTest {
 	void testAddFailAbsolute() throws IOException {
 		Path cwd = Util.getCwd();
 		Path testFile = Files.createFile(cwd.resolve("file1.java"));
-		int result = JBang	.getCommandLine()
-							.execute("template", "add", "-f", cwd.toString(), "--name=name",
-									"/test=" + testFile.toString());
+		int result = JBang.execute("template", "add", "-f", cwd.toString(), "--name=name",
+				"/test=" + testFile.toString());
 		assertThat(result, is(2));
 	}
 
@@ -210,9 +227,8 @@ public class TestTemplate extends BaseTest {
 	void testAddFailParent() throws IOException {
 		Path cwd = Util.getCwd();
 		Path testFile = Files.createFile(cwd.resolve("file1.java"));
-		int result = JBang	.getCommandLine()
-							.execute("template", "add", "-f", cwd.toString(), "--name=name",
-									"test/../..=" + testFile.toString());
+		int result = JBang.execute("template", "add", "-f", cwd.toString(), "--name=name",
+				"test/../..=" + testFile.toString());
 		assertThat(result, is(2));
 	}
 
@@ -220,9 +236,8 @@ public class TestTemplate extends BaseTest {
 	void testAddFailNoTargetPattern() throws IOException {
 		Path cwd = Util.getCwd();
 		Path testFile = Files.createFile(cwd.resolve("file1.java"));
-		int result = JBang	.getCommandLine()
-							.execute("template", "add", "-f", cwd.toString(), "--name=name",
-									"test=" + testFile.toString());
+		int result = JBang.execute("template", "add", "-f", cwd.toString(), "--name=name",
+				"test=" + testFile.toString());
 		assertThat(result, is(2));
 	}
 
@@ -232,9 +247,8 @@ public class TestTemplate extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(), "--name=template-with-single-property",
-				"-d", "Description of the template", "-P", "new-test-key", testFile.toString());
+		JBang.execute("template", "add", "-f", cwd.toString(), "--name=template-with-single-property",
+				"--description", "Description of the template", "-P", "new-test-key", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)),
 				is(true));
 		Template name = Template.get("template-with-single-property");
@@ -248,10 +262,9 @@ public class TestTemplate extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(),
+		JBang.execute("template", "add", "-f", cwd.toString(),
 				"--name=template-with-single-complex-property",
-				"-d", "Description of the template", "-P",
+				"--description", "Description of the template", "-P",
 				"new-test-key:This is a description for the property key:3.14", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)),
 				is(true));
@@ -267,10 +280,9 @@ public class TestTemplate extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("template", "add", "-f", cwd.toString(),
+		JBang.execute("template", "add", "-f", cwd.toString(),
 				"--name=template-with-complex-properties",
-				"-d", "Description of the template", "-P",
+				"--description", "Description of the template", "-P",
 				"new-test-key:This is a description for the property key:3.14", "--property",
 				"second-test-key:This is another description for the second property key:Non-Blocker",
 				testFile.toString());

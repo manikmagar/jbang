@@ -10,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import dev.jbang.BaseTest;
+import dev.jbang.resources.ResourceRef;
 import dev.jbang.source.Project;
 import dev.jbang.source.Source;
 import dev.jbang.source.sources.JavaSource;
@@ -31,8 +32,8 @@ public class TestGrape extends BaseTest {
 				+
 				"})\n";
 
-		Source src = new JavaSource(grabBlock, null);
-		Project prj = src.createProject();
+		Source src = new JavaSource(ResourceRef.forLiteral(grabBlock), null);
+		Project prj = Project.builder().build(src);
 		List<String> deps = prj.getMainSourceSet().getDependencies();
 
 		assertThat(deps, hasItem("org.hibernate:hibernate-core:5.4.10.Final"));

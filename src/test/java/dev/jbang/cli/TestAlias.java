@@ -17,12 +17,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import dev.jbang.BaseTest;
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.catalog.Alias;
+import dev.jbang.catalog.AliasRef;
 import dev.jbang.catalog.Catalog;
 import dev.jbang.util.Util;
-
-import picocli.CommandLine;
 
 public class TestAlias extends BaseTest {
 
@@ -35,19 +35,36 @@ public class TestAlias extends BaseTest {
 			"      \"script-ref\": \"one\",\n" +
 			"      \"description\": \"twodesc\",\n" +
 			"      \"arguments\": [\"2\"],\n" +
-			"      \"java-options\": [\"--two\"],\n" +
-			"      \"compile-options\": [\"--ctwo\"],\n" +
-			"      \"native-options\": [\"--ntwo\"],\n" +
+			"      \"runtime-options\": [\"--two\"],\n" +
+			"      \"sources\": [\"twosrc\"],\n" +
+			"      \"files\": [\"twofiles\"],\n" +
 			"      \"dependencies\": [\"twodep\"],\n" +
 			"      \"repositories\": [\"tworepo\"],\n" +
 			"      \"classpaths\": [\"twocp\"],\n" +
-			"      \"properties\": {\"two\":\"2\"}\n" +
+			"      \"properties\": {\"two\":\"2\"},\n" +
+			"      \"java\": \"twojava\",\n" +
+			"      \"main\": \"twomain\",\n" +
+			"      \"module\": \"twomodule\",\n" +
+			"      \"compile-options\": [\"--ctwo\"],\n" +
+			"      \"native-image\": true,\n" +
+			"      \"native-options\": [\"--ntwo\"],\n" +
+			"      \"source-type\": \"java\",\n" +
+			"      \"jfr\": \"twojfr\",\n" +
+			"      \"debug\": {\"twod\":\"2\"},\n" +
+			"      \"cds\": true,\n" +
+			"      \"interactive\": true,\n" +
+			"      \"enable-preview\": true,\n" +
+			"      \"enable-assertions\": true,\n" +
+			"      \"enable-system-assertions\": true,\n" +
+			"      \"manifest-options\": {\"twom\":\"2\"},\n" +
+			"      \"java-agents\": [{\"agent-ref\":\"twojag\",\"options\":\"twoopts\"}]\n" +
 			"    },\n" +
 			"    \"three\": {\n" +
 			"      \"script-ref\": \"http://dummy\",\n" +
 			"      \"arguments\": [\"3\"],\n" +
-			"      \"java-options\": [\"--three\"],\n" +
+			"      \"runtime-options\": [\"--three\"],\n" +
 			"      \"compile-options\": [\"--cthree\"],\n" +
+			"      \"native-image\": true,\n" +
 			"      \"native-options\": [\"--nthree\"],\n" +
 			"      \"properties\": {\"three\":\"3\"}\n" +
 			"    },\n" +
@@ -55,13 +72,29 @@ public class TestAlias extends BaseTest {
 			"      \"script-ref\": \"three\",\n" +
 			"      \"description\": \"fourdesc\",\n" +
 			"      \"arguments\": [\"4\"],\n" +
-			"      \"java-options\": [\"--four\"],\n" +
-			"      \"compile-options\": [\"--cfour\"],\n" +
-			"      \"native-options\": [\"--nfour\"],\n" +
+			"      \"runtime-options\": [\"--four\"],\n" +
+			"      \"sources\": [\"foursrc\"],\n" +
+			"      \"files\": [\"fourfiles\"],\n" +
 			"      \"dependencies\": [\"fourdep\"],\n" +
 			"      \"repositories\": [\"fourrepo\"],\n" +
 			"      \"classpaths\": [\"fourcp\"],\n" +
-			"      \"properties\": {\"four\":\"4\"}\n" +
+			"      \"properties\": {\"four\":\"4\"},\n" +
+			"      \"java\": \"fourjava\",\n" +
+			"      \"main\": \"fourmain\",\n" +
+			"      \"module\": \"fourmodule\",\n" +
+			"      \"compile-options\": [\"--cfour\"],\n" +
+			"      \"native-image\": false,\n" +
+			"      \"native-options\": [\"--nfour\"],\n" +
+			"      \"source-type\": \"kotlin\",\n" +
+			"      \"jfr\": \"fourjfr\",\n" +
+			"      \"debug\": {\"fourd\":\"4\"},\n" +
+			"      \"cds\": false,\n" +
+			"      \"interactive\": false,\n" +
+			"      \"enable-preview\": false,\n" +
+			"      \"enable-assertions\": false,\n" +
+			"      \"enable-system-assertions\": false,\n" +
+			"      \"manifest-options\": {\"fourm\":\"4\"},\n" +
+			"      \"java-agents\": [{\"agent-ref\":\"fourjag\",\"options\":\"fouropts\"}]\n" +
 			"    },\n" +
 			"    \"five\": {\n" +
 			"      \"script-ref\": \"three\"\n" +
@@ -82,7 +115,7 @@ public class TestAlias extends BaseTest {
 			"}";
 
 	@BeforeEach
-	void init() throws IOException {
+	void initCatalog() throws IOException {
 		Files.write(jbangTempDir.resolve(Catalog.JBANG_CATALOG_JSON), aliases.getBytes());
 		Util.setCwd(Files.createDirectory(cwdDir.resolve("test")));
 	}
@@ -99,8 +132,7 @@ public class TestAlias extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
 		Alias alias = Alias.get("name");
 		assertThat(alias.scriptRef, is("test.java"));
@@ -112,20 +144,21 @@ public class TestAlias extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add",
+		JBang.execute("alias", "add",
 				"-f", cwd.toString(),
-				"--name=name", testFile.toString(),
+				"--name=name",
 				"--description", "desc",
 				"--deps", "deps",
 				"--repos", "repos",
 				"--cp", "cps",
 				"--runtime-option", "jopts",
-				"-D", "prop=val",
+				"-Dprop=val",
 				"--main", "mainclass",
 				"--compile-option", "copts",
+				"--native",
 				"--native-option", "nopts",
 				"--java", "999",
+				testFile.toString(),
 				"aap", "noot", "mies");
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)),
 				is(true));
@@ -142,10 +175,10 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.classpaths, contains("cps"));
 		assertThat(alias.properties, aMapWithSize(1));
 		assertThat(alias.properties, hasEntry("prop", "val"));
-		assertThat(alias.arguments, iterableWithSize(3));
 		assertThat(alias.mainClass, is("mainclass"));
 		assertThat(alias.compileOptions, iterableWithSize(1));
 		assertThat(alias.compileOptions, contains("copts"));
+		assertThat(alias.nativeImage, is(Boolean.TRUE));
 		assertThat(alias.nativeOptions, iterableWithSize(1));
 		assertThat(alias.nativeOptions, contains("nopts"));
 		assertThat(alias.javaVersion, is("999"));
@@ -160,19 +193,20 @@ public class TestAlias extends BaseTest {
 		Path catFile = Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON);
 		Files.write(catFile, "".getBytes());
 		assertThat(Files.size(catFile), is(0L));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add",
-				"--name=name", testFile.toString(),
+		JBang.execute("alias", "add",
+				"--name=name",
 				"--description", "desc",
 				"--deps", "deps",
 				"--repos", "repos",
 				"--cp", "cps",
 				"--runtime-option", "jopts",
-				"-D", "prop=val",
+				"-Dprop=val",
 				"--main", "mainclass",
 				"--compile-option", "copts",
 				"--native-option", "nopts",
+				"--source-type", "java",
 				"--java", "999",
+				testFile.toString(),
 				"aap", "noot", "mies");
 		assertThat(Files.size(catFile), not(is(0L)));
 		Alias alias = Alias.get("name");
@@ -192,8 +226,10 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.mainClass, is("mainclass"));
 		assertThat(alias.compileOptions, iterableWithSize(1));
 		assertThat(alias.compileOptions, contains("copts"));
+		assertThat(alias.nativeImage, is(nullValue()));
 		assertThat(alias.nativeOptions, iterableWithSize(1));
 		assertThat(alias.nativeOptions, contains("nopts"));
+		assertThat(alias.forceType, is("java"));
 		assertThat(alias.javaVersion, is("999"));
 		assertThat(alias.arguments, contains("aap", "noot", "mies"));
 	}
@@ -205,11 +241,25 @@ public class TestAlias extends BaseTest {
 		Path testFile = sub.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
 		Alias name = Alias.get("name");
 		assertThat(name.scriptRef, is(Paths.get("sub/test.java").toString()));
+	}
+
+	@Test
+	void testNoEmptiesStored() throws IOException {
+		Path cwd = Util.getCwd();
+		Path sub = Files.createDirectory(cwd.resolve("sub"));
+		Path testFile = sub.resolve("test.java");
+		Files.write(testFile, "// Test file".getBytes());
+		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		Path catalog = Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON);
+		assertThat(Files.isRegularFile(catalog), is(true));
+		String catjson = Files.readString(catalog);
+		assertThat(catjson, not(containsString("{}")));
+		assertThat(catjson, not(containsString("[]")));
 	}
 
 	@Test
@@ -217,10 +267,10 @@ public class TestAlias extends BaseTest {
 		Path cwd = Util.getCwd();
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, ("// Test file \n" +
-				"//DESCRIPTION Description of the script inside the script").getBytes());
+				"//DESCRIPTION Description of the script inside the script")
+			.getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
 		Alias name = Alias.get("name");
 		assertThat(name.scriptRef, is("test.java"));
@@ -232,11 +282,11 @@ public class TestAlias extends BaseTest {
 		Path cwd = Util.getCwd();
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, ("// Test file \n" +
-				"//DESCRIPTION Description of the script inside the script").getBytes());
+				"//DESCRIPTION Description of the script inside the script")
+			.getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name",
-				"-d", "Description of the script in arguments", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name",
+				"--description", "Description of the script in arguments", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
 		Alias name = Alias.get("name");
 		assertThat(name.scriptRef, is("test.java"));
@@ -251,10 +301,10 @@ public class TestAlias extends BaseTest {
 		Files.write(testFile, ("// Test file \n" +
 				"//DESCRIPTION Description first tag\n" +
 				"//DESCRIPTION description second tag\n" +
-				"//DESCRIPTION description third tag").getBytes());
+				"//DESCRIPTION description third tag")
+			.getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
 		Alias name = Alias.get("name");
 		assertThat(name.scriptRef, is("test.java"));
@@ -268,13 +318,11 @@ public class TestAlias extends BaseTest {
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, ("// Test file \n").getBytes());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
 		Alias name = Alias.get("name");
 		assertThat(name.scriptRef, is("test.java"));
-		assertThat(name.description,
-				nullValue());
+		assertThat(name.description, nullValue());
 	}
 
 	@Test
@@ -286,8 +334,7 @@ public class TestAlias extends BaseTest {
 		Path hiddenJBangPath = Paths.get(cwd.toString(), Settings.JBANG_DOT_DIR);
 		Files.createDirectory(hiddenJBangPath);
 		Files.createFile(Paths.get(cwd.toString(), Settings.JBANG_DOT_DIR, Catalog.JBANG_CATALOG_JSON));
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
 		Catalog catalog = Catalog.get(hiddenJBangPath);
 		Alias name = catalog.aliases.get("name");
@@ -299,8 +346,7 @@ public class TestAlias extends BaseTest {
 		Path cwd = Util.getCwd();
 		Path testFile = cwd.resolve("test.java");
 		Files.write(testFile, "// Test file".getBytes());
-		JBang jbang = new JBang();
-		new CommandLine(jbang).execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
 		Alias one = Alias.get("one");
 		Alias name = Alias.get("name");
 		assertThat(one.scriptRef, is("http://dummy"));
@@ -310,10 +356,8 @@ public class TestAlias extends BaseTest {
 	@Test
 	void testAddWithRepos() throws IOException {
 		String jar = "dummygroup:dummyart:0.1";
-		CommandLine.ParseResult pr = JBang	.getCommandLine()
-											.parseArgs("alias", "add", "--name=aliaswithrepo", "--repos",
-													"http://dummyrepo", jar);
-		AliasAdd add = (AliasAdd) pr.subcommand().subcommand().commandSpec().userObject();
+		dev.jbang.cli.Alias.AliasAdd add = JBang.parseCommand("alias", "add", "--name=aliaswithrepo", "--repos",
+				"https://dummyrepo", jar);
 		try {
 			add.doCall();
 			fail("Should have thrown exception");
@@ -321,17 +365,37 @@ public class TestAlias extends BaseTest {
 			StringWriter sw = new StringWriter();
 			ex.printStackTrace(new PrintWriter(sw));
 			assertThat(sw.toString(), containsString(
-					"Could not transfer artifact dummygroup:dummyart:pom:0.1 from/to http://dummyrepo"));
+					"Could not transfer artifact dummygroup:dummyart:pom:0.1 from/to https://dummyrepo"));
 		}
 	}
 
 	@Test
-	void testAddMissingScript() {
-		assertThrows(IllegalArgumentException.class, () -> {
-			CommandLine.ParseResult pr = JBang.getCommandLine().parseArgs("alias", "add", "--name=name");
-			AliasAdd add = (AliasAdd) pr.subcommand().subcommand().commandSpec().userObject();
-			add.doCall();
-		});
+	void testAddMissingScript() throws Exception {
+		CaptureResult<Integer> result = captureOutput(() -> JBang.execute("alias", "add", "--name=name"));
+		assertThat(result.result, equalTo(ExitException.EXIT_INVALID_INPUT));
+		assertThat(result.err, containsString("Missing required parameter"));
+		assertThat(result.err, containsString("Usage:"));
+	}
+
+	@Test
+	void testAddExisting() throws IOException {
+		Path cwd = Util.getCwd();
+		Path testFile = cwd.resolve("test.java");
+		Files.write(testFile, "// Test file".getBytes());
+		Path testFile2 = cwd.resolve("test2.java");
+		Files.write(testFile2, "// Test file 2".getBytes());
+		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(false));
+		int exitCode = JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile.toString());
+		assertThat(exitCode, equalTo(ExitException.EXIT_OK));
+		assertThat(Files.isRegularFile(Paths.get(cwd.toString(), Catalog.JBANG_CATALOG_JSON)), is(true));
+		Alias alias = Alias.get("name");
+		assertThat(alias.scriptRef, is("test.java"));
+		exitCode = JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", testFile2.toString());
+		assertThat(exitCode, equalTo(ExitException.EXIT_INVALID_INPUT));
+		exitCode = JBang.execute("alias", "add", "-f", cwd.toString(), "--name=name", "--force", testFile2.toString());
+		assertThat(exitCode, equalTo(ExitException.EXIT_OK));
+		alias = Alias.get("name");
+		assertThat(alias.scriptRef, is("test2.java"));
 	}
 
 	@Test
@@ -350,7 +414,9 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.runtimeOptions, nullValue());
 		assertThat(alias.properties, nullValue());
 		assertThat(alias.compileOptions, nullValue());
+		assertThat(alias.nativeImage, nullValue());
 		assertThat(alias.nativeOptions, nullValue());
+		assertThat(alias.forceType, nullValue());
 	}
 
 	@Test
@@ -364,6 +430,10 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.arguments, contains("2"));
 		assertThat(alias.runtimeOptions, iterableWithSize(1));
 		assertThat(alias.runtimeOptions, contains("--two"));
+		assertThat(alias.sources, iterableWithSize(1));
+		assertThat(alias.sources, contains("twosrc"));
+		assertThat(alias.resources, iterableWithSize(1));
+		assertThat(alias.resources, contains("twofiles"));
 		assertThat(alias.dependencies, iterableWithSize(1));
 		assertThat(alias.dependencies, contains("twodep"));
 		assertThat(alias.repositories, iterableWithSize(1));
@@ -372,10 +442,27 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.classpaths, contains("twocp"));
 		assertThat(alias.properties, aMapWithSize(1));
 		assertThat(alias.properties, hasEntry("two", "2"));
+		assertThat(alias.javaVersion, equalTo("twojava"));
+		assertThat(alias.mainClass, equalTo("twomain"));
+		assertThat(alias.moduleName, equalTo("twomodule"));
 		assertThat(alias.compileOptions, iterableWithSize(1));
 		assertThat(alias.compileOptions, contains("--ctwo"));
+		assertThat(alias.nativeImage, is(Boolean.TRUE));
 		assertThat(alias.nativeOptions, iterableWithSize(1));
 		assertThat(alias.nativeOptions, contains("--ntwo"));
+		assertThat(alias.forceType, is("java"));
+		assertThat(alias.jfr, equalTo("twojfr"));
+		assertThat(alias.debug, aMapWithSize(1));
+		assertThat(alias.debug, hasEntry("twod", "2"));
+		assertThat(alias.cds, is(Boolean.TRUE));
+		assertThat(alias.interactive, is(Boolean.TRUE));
+		assertThat(alias.enablePreview, is(Boolean.TRUE));
+		assertThat(alias.enableAssertions, is(Boolean.TRUE));
+		assertThat(alias.enableSystemAssertions, is(Boolean.TRUE));
+		assertThat(alias.manifestOptions, aMapWithSize(1));
+		assertThat(alias.manifestOptions, hasEntry("twom", "2"));
+		assertThat(alias.javaAgents, iterableWithSize(1));
+		assertThat(alias.javaAgents, contains(new Alias.JavaAgent("twojag", "twoopts")));
 	}
 
 	@Test
@@ -389,6 +476,10 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.arguments, contains("4"));
 		assertThat(alias.runtimeOptions, iterableWithSize(1));
 		assertThat(alias.runtimeOptions, contains("--four"));
+		assertThat(alias.sources, iterableWithSize(1));
+		assertThat(alias.sources, contains("foursrc"));
+		assertThat(alias.resources, iterableWithSize(1));
+		assertThat(alias.resources, contains("fourfiles"));
 		assertThat(alias.dependencies, iterableWithSize(1));
 		assertThat(alias.dependencies, contains("fourdep"));
 		assertThat(alias.repositories, iterableWithSize(1));
@@ -397,10 +488,27 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.classpaths, contains("fourcp"));
 		assertThat(alias.properties, aMapWithSize(1));
 		assertThat(alias.properties, hasEntry("four", "4"));
+		assertThat(alias.javaVersion, equalTo("fourjava"));
+		assertThat(alias.mainClass, equalTo("fourmain"));
+		assertThat(alias.moduleName, equalTo("fourmodule"));
 		assertThat(alias.compileOptions, iterableWithSize(1));
 		assertThat(alias.compileOptions, contains("--cfour"));
+		assertThat(alias.nativeImage, is(Boolean.FALSE));
 		assertThat(alias.nativeOptions, iterableWithSize(1));
 		assertThat(alias.nativeOptions, contains("--nfour"));
+		assertThat(alias.forceType, is("kotlin"));
+		assertThat(alias.jfr, equalTo("fourjfr"));
+		assertThat(alias.debug, aMapWithSize(1));
+		assertThat(alias.debug, hasEntry("fourd", "4"));
+		assertThat(alias.cds, is(Boolean.FALSE));
+		assertThat(alias.interactive, is(Boolean.FALSE));
+		assertThat(alias.enablePreview, is(Boolean.FALSE));
+		assertThat(alias.enableAssertions, is(Boolean.FALSE));
+		assertThat(alias.enableSystemAssertions, is(Boolean.FALSE));
+		assertThat(alias.manifestOptions, aMapWithSize(1));
+		assertThat(alias.manifestOptions, hasEntry("fourm", "4"));
+		assertThat(alias.javaAgents, iterableWithSize(1));
+		assertThat(alias.javaAgents, contains(new Alias.JavaAgent("fourjag", "fouropts")));
 	}
 
 	@Test
@@ -417,6 +525,7 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.properties, hasEntry("three", "3"));
 		assertThat(alias.compileOptions, iterableWithSize(1));
 		assertThat(alias.compileOptions, contains("--cthree"));
+		assertThat(alias.nativeImage, is(Boolean.TRUE));
 		assertThat(alias.nativeOptions, iterableWithSize(1));
 		assertThat(alias.nativeOptions, contains("--nthree"));
 	}
@@ -431,6 +540,7 @@ public class TestAlias extends BaseTest {
 		assertThat(alias.runtimeOptions, nullValue());
 		assertThat(alias.properties, nullValue());
 		assertThat(alias.compileOptions, nullValue());
+		assertThat(alias.nativeImage, nullValue());
 		assertThat(alias.nativeOptions, nullValue());
 	}
 
@@ -443,6 +553,58 @@ public class TestAlias extends BaseTest {
 			assertThat(ex.getMessage(), containsString("seven"));
 		}
 
+	}
+
+	@Test
+	void testParseVersionedAlias() throws IOException {
+		clearSettingsCaches();
+		// Use existing "one" alias from standard catalog
+		AliasRef ref = AliasRef.parse("one:2.0.0");
+		Alias alias = Alias.get(ref.alias);
+
+		assertThat(alias, notNullValue());
+		assertThat(ref.requestedVersion, equalTo("2.0.0"));
+		assertThat(alias.scriptRef, equalTo("http://dummy"));
+	}
+
+	@Test
+	void testParseVersionedAliasFromCatalog() throws IOException {
+		String catalog = "{\n" +
+				"  \"aliases\": {\n" +
+				"    \"test\": {\n" +
+				"      \"script-ref\": \"com.example:artifact:1.0.0\"\n" +
+				"    }\n" +
+				"  }\n" +
+				"}";
+		Files.write(jbangTempDir.resolve(Catalog.JBANG_CATALOG_JSON), catalog.getBytes());
+		clearSettingsCaches();
+		Catalog cat = Catalog.get(jbangTempDir.resolve(Catalog.JBANG_CATALOG_JSON));
+
+		AliasRef ref = AliasRef.parse("test:2.0.0");
+		Alias alias = Alias.get(cat, ref.alias);
+
+		assertThat(alias, notNullValue());
+		assertThat(ref.requestedVersion, equalTo("2.0.0"));
+	}
+
+	@Test
+	void testGavNotParsedAsVersionedAlias() {
+		Alias alias = Alias.get("io.quarkus:artifact:1.0.0@jar");
+		assertThat(alias, nullValue());
+	}
+
+	@Test
+	void testEmptyVersionThrowsError() {
+		Exception exception = assertThrows(IllegalArgumentException.class,
+				() -> AliasRef.parse("test:@catalog"));
+		assertThat(exception.getMessage(), containsString("Invalid alias syntax"));
+	}
+
+	@Test
+	void testEmptyAliasNameThrowsError() {
+		Exception exception = assertThrows(IllegalArgumentException.class,
+				() -> AliasRef.parse(":1.0@catalog"));
+		assertThat(exception.getMessage(), containsString("Invalid alias"));
 	}
 
 }

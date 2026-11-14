@@ -1,94 +1,107 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-info-tools(1)
+= JBANG INFO TOOLS
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang info tools -- Prints a json description usable for tools/IDE's to get classpath and more info for a jbang script/application.
 
-jbang-info-tools - Prints a json description usable for tools/IDE's to get classpath and more info for a jbang script/application. Exact format is still quite experimental.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang info tools [OPTIONS] [<scriptOrFile>]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Prints a JSON description of a script (sources, dependencies, class path, Java
+version and more) for IDEs and tools. Use --select to print just one field.
 
-*jbang info tools* *-o* [*-h*] *--fresh* [*--insecure*] [*--jsh*] *--quiet* *--verbose*
-                 [*--config*=_<config>_] [*--cp*=_<classpaths>_]...
-                 [*-D*=_<String=String>_]... [*--deps*=_<dependencies>_]...
-                 [*--repos*=_<repositories>_]... _<scriptOrFile>_
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang info tools hello.java
+jbang info tools --select=resolvedDependencies hello.java
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Prints a json description usable for tools/IDE's to get classpath and more info for a jbang script/application. Exact format is still quite experimental.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*--select*=<select>::
+Indicate the name of the field to select and return from the full info result
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*-s*, *--sources*=<sources>::
+Add additional sources.
 
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
+*--files*=<files>::
+Add additional files.
 
-*--cp, --class-path*=_<classpaths>_::
-  Add class path entries.
-
-*-D*, _<String=String>_::
-  set a system property
-
-*--deps*=_<dependencies>_::
-  Add additional dependencies (Use commas to separate them).
-
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
-
-*-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
-
-*--insecure*::
-  Enable insecure trust of all SSL certificates.
+*-T*, *--source-type*=<source-type>::
+Force input to be interpreted as the given type. One of: java, jshell, kotlin, groovy, markdown.
 
 *--jsh*::
-  Force input to be interpreted with jsh/jshell
+Force input to be interpreted with jsh/jshell. Deprecated: use '--source-type jshell'
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--catalog*=<catalog>::
+Path to catalog file to be used instead of the default
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*-D*=<key>=<value>::
+set a system property
++
+Default: `true`
 
-*--repos*=_<repositories>_::
-  Add additional repositories.
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--repos*=<repos>::
+Add additional repositories.
 
-// end::picocli-generated-man-section-options[]
+*--cp*=<cp>::
+Add class path entries.
++
+Aliases: `--class-path`
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*--ignore-transitive-repositories*::
+Ignore remote repositories found in transitive dependencies
++
+Aliases: `--itr`
 
-_<scriptOrFile>_::
-  A file with java code or if named .jsh will be run with jshell
+*--build-dir*=<build-dir>::
+Use given directory for build results
 
-// end::picocli-generated-man-section-arguments[]
+*--module*=<module>::
+Treat resource as a module. Optionally with the given module name
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// end::picocli-generated-full-manpage[]
+*--[no-]verbose*::
+jbang will be verbose on what it does.
+
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
+
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
+
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
+
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
+
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
+
+*--no-netrc*::
+Disable .netrc authentication lookup.
+
+== ARGUMENTS
+
+*<scriptOrFile>*::
+A file or URL to a Java code file
+

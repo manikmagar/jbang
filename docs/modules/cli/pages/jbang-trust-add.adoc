@@ -1,67 +1,62 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-trust-add(1)
+= JBANG TRUST ADD
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang trust add -- Add trust domains.
 
-jbang-trust-add - Add trust domains.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang trust add [OPTIONS] <rules>...
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Trusts scripts whose URL starts with one of the given prefixes. Keep the prefix
+as narrow as you can, e.g. a user or repository instead of a whole site.
 
-*jbang trust add* *-o* *--fresh* *--quiet* *--verbose* _<arg0>_...
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang trust add https://github.com/jbangdev/
+jbang trust add https://github.com/myorg/scripts/
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Add trust domains.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-_<arg0>_...::
-  Rules for trusted sources
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// end::picocli-generated-man-section-arguments[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+== ARGUMENTS
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*<rules>*::
+Rules for trusted sources
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

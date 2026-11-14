@@ -1,93 +1,109 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-init(1)
+= JBANG INIT
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang init -- Initialize a script.
 
-jbang-init - Initialize a script.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang init [OPTIONS] <scriptOrFile> [<params>...]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Creates a new script from a template, ready to run with `jbang <file>`. The
+template is picked from the file extension unless you choose one with
+--template; `jbang template list` shows what is available. Give a prompt after
+the file name to have an AI model write the code instead; this needs an AI
+provider and API key (via the --ai-* options or JBANG_AI_* env vars), otherwise
+the normal template is used.
 
-*jbang init* *-o* [*-h*] [*--force*] *--fresh* [*--insecure*] [*--jsh*] *--quiet* *--verbose*
-           [*--config*=_<config>_] [*-t*=_<initTemplate>_] [*-D*=_<String=Object>_]...
-           [*--deps*=_<dependencies>_]... _<scriptOrFile>_
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang init hello.java
+jbang init --template=cli mytool.java
+jbang init hello.kt
+jbang init weather.java "a CLI that prints the weather for a city"
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Initialize a script.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-j*, *--java*=<java>::
+JDK version to use for running the script.
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--ai-provider*=<ai-provider>::
+Provider to use (openai, openrouter, etc.) when using init with a prompt
++
+Default: ``
 
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
+*--ai-api-key*=<ai-api-key>::
+API Key/token to use for the AI Provider
++
+Default: ``
 
-*-D*, _<String=Object>_::
-  set a system property
+*--ai-endpoint*=<ai-endpoint>::
+OpenAI compatible Endpoint to use for the AI Provider when using init with a prompt
++
+Default: ``
 
-*--deps*=_<dependencies>_::
-  Add additional dependencies (Use commas to separate them).
+*--ai-model*=<ai-model>::
+Model string to use for init prompting
++
+Default: ``
+
+*-t*, *--template*=<template>::
+Init script with a java class useful for scripting
 
 *--force*::
-  Force overwrite of existing files
+Force overwrite of existing files
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--edit*::
+Open editor on the generated file(s)
+
+*-D*=<key>=<value>::
+set a system property
+
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
 
 *-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
+Display this help and exit
+
+*--config*=<config>::
+Path to config file to be used instead of the default
 
 *--insecure*::
-  Enable insecure trust of all SSL certificates.
+Enable insecure trust of all SSL certificates.
 
-*--jsh*::
-  Force input to be interpreted with jsh/jshell
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-*-t*, *--template*=_<initTemplate>_::
-  Init script with a java class useful for scripting
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// end::picocli-generated-man-section-options[]
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-_<scriptOrFile>_::
-  A file with java code or if named .jsh will be run with jshell
+== ARGUMENTS
 
-// end::picocli-generated-man-section-arguments[]
+*<scriptOrFile>*::
+A file or URL to a Java code file
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*<params>*::
+Parameters to pass on to the generation
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

@@ -1,14 +1,16 @@
 package dev.jbang.util;
 
+import static dev.jbang.util.NetUtil.ConnectionConfigurator.authentication;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -20,6 +22,14 @@ import dev.jbang.catalog.Catalog;
 public class TestUtil extends BaseTest {
 	public static void clearSettingsCaches() {
 		Catalog.clearCache();
+	}
+
+	@Test
+	void testGetSourcePackage() {
+		assertEquals("blah", Util.getSourcePackage("package blah;").get());
+		assertEquals("blahpackage", Util.getSourcePackage("package blahpackage;").get());
+		assertEquals("blahpackagewonka", Util.getSourcePackage("package blahpackagewonka;").get());
+
 	}
 
 	@Test
@@ -63,6 +73,21 @@ public class TestUtil extends BaseTest {
 
 		content = "public static\nvoid\nmain(String\nargs[]) {";
 		assertTrue(Util.hasMainMethod(content));
+
+		// the Java 21 / JEP-445
+
+		content = "class HelloWorld {\n" +
+				"\tvoid main() {\n" +
+				"\t\tSystem.out.println(\"Hello world from an instance main method o/\");\n" +
+				"\t}\n" +
+				"}";
+		assertTrue(Util.hasMainMethod(content));
+
+		content = "void main() {\n" +
+				"\t\tSystem.out.println(\"Hello world from an unnamed main method o/\");\n" +
+				"\t}\n";
+		assertTrue(Util.hasMainMethod(content));
+
 	}
 
 	@Test
@@ -94,7 +119,6 @@ public class TestUtil extends BaseTest {
 
 	@Test
 	void testExplodeAbs() throws IOException {
-		Path baseDir = examplesTestFolder;
 
 		String source = ".";
 		String dir = examplesTestFolder.toString().replace('\\', '/');
@@ -122,18 +146,84 @@ public class TestUtil extends BaseTest {
 
 	@Test
 	void testDispostionFilename() {
-		assertThat(Util.getDispositionFilename("inline; filename=token"), equalTo("token"));
-		assertThat(Util.getDispositionFilename("inline; filename=\"quoted string\""), equalTo("quoted string"));
-		assertThat(Util.getDispositionFilename("inline; filename*=iso-8859-1'en'%A3%20rates"), equalTo("£ rates"));
-		assertThat(Util.getDispositionFilename("inline; filename*=UTF-8''%c2%a3%20and%20%e2%82%ac%20rates"),
+		assertThat(NetUtil.getDispositionFilename("inline; filename=token"), equalTo("token"));
+		assertThat(NetUtil.getDispositionFilename("inline; filename=\"quoted string\""), equalTo("quoted string"));
+		assertThat(NetUtil.getDispositionFilename("inline; filename*=iso-8859-1'en'%A3%20rates"), equalTo("£ rates"));
+		assertThat(NetUtil.getDispositionFilename("inline; filename*=UTF-8''%c2%a3%20and%20%e2%82%ac%20rates"),
 				equalTo("£ and € rates"));
-		assertThat(Util.getDispositionFilename("inline; filename=token; filename*=iso-8859-1'en'%A3%20rates"),
+		assertThat(NetUtil.getDispositionFilename("inline; filename=token; filename*=iso-8859-1'en'%A3%20rates"),
 				equalTo("£ rates"));
 		// The spec actually tells us to always use filename* but our implementation is
 		// too dumb for that
-		assertThat(Util.getDispositionFilename("inline; filename*=iso-8859-1'en'%A3%20rates; filename=token"),
+		assertThat(NetUtil.getDispositionFilename("inline; filename*=iso-8859-1'en'%A3%20rates; filename=token"),
 				equalTo("token"));
 		// assertThat(Util.getDispositionFilename("inline;
 		// filename*=iso-fake-1''dummy"), equalTo(""));
+	}
+
+	@Test
+	void testUrlBasicAuth() throws IOException {
+		System.setProperty("SOME_USERNAME", "JohnDoe");
+		System.setProperty("SOME_PASSWORD", "VeryStrongPassword1");
+		URLConnection connection = new NoOpUrlConnection(
+				new URL("https://${SOME_USERNAME}:${SOME_PASSWORD}@example.com"));
+
+		authentication().configure(connection);
+
+		assertThat(connection.getRequestProperty("Authorization"),
+				equalTo("Basic Sm9obkRvZTpWZXJ5U3Ryb25nUGFzc3dvcmQx"));
+	}
+
+	@Test
+	void testToJavaIdentifier() {
+		// dont get a leading underscore if a valid name
+		assertThat(Util.toJavaIdentifier("HelloWorld"), equalTo("HelloWorld"));
+		assertThat(Util.toJavaIdentifier("_underscore"), equalTo("_underscore"));
+		assertThat(Util.toJavaIdentifier("Ångström"), equalTo("Ångström"));
+		assertThat(Util.toJavaIdentifier("café"), equalTo("café"));
+
+		// Leading digits are handled by the extra underscore
+		assertThat(Util.toJavaIdentifier("123abc"), equalTo("_123abc"));
+		assertThat(Util.toJavaIdentifier("0test"), equalTo("_0test"));
+
+		// Invalid characters are replaced with underscores
+		assertThat(Util.toJavaIdentifier("foo-bar"), equalTo("_foo_bar"));
+		assertThat(Util.toJavaIdentifier("hello world"), equalTo("_hello_world"));
+		assertThat(Util.toJavaIdentifier("my.package.Class"), equalTo("_my_package_Class"));
+		assertThat(Util.toJavaIdentifier("test+plus"), equalTo("_test_plus"));
+	}
+
+	@Test
+	void testHasExecutableExtension() {
+		// Should recognize .jar files
+		assertTrue(Util.hasExecutableExtension("myapp.jar"));
+		assertTrue(Util.hasExecutableExtension("MyApp.JAR"));
+		assertTrue(Util.hasExecutableExtension("/path/to/app.jar"));
+
+		// Should recognize .war files
+		assertTrue(Util.hasExecutableExtension("myapp.war"));
+		assertTrue(Util.hasExecutableExtension("MyApp.WAR"));
+		assertTrue(Util.hasExecutableExtension("/path/to/app.war"));
+
+		// Should not recognize other files
+		assertFalse(Util.hasExecutableExtension("script.java"));
+		assertFalse(Util.hasExecutableExtension("script.jsh"));
+		assertFalse(Util.hasExecutableExtension("script.kt"));
+		assertFalse(Util.hasExecutableExtension("script"));
+		assertFalse(Util.hasExecutableExtension((String) null));
+	}
+
+	@Test
+	void testUnkebabify() {
+		// Executable archives should not be renamed
+		assertThat(Util.unkebabify("myapp.jar"), equalTo("myapp.jar"));
+		assertThat(Util.unkebabify("myapp.war"), equalTo("myapp.war"));
+		assertThat(Util.unkebabify("script.jsh"), equalTo("script.jsh"));
+
+		// Java source files should remain unchanged
+		assertThat(Util.unkebabify("MyClass.java"), equalTo("MyClass.java"));
+
+		// Extension-less files should get .java added
+		assertThat(Util.unkebabify("my-script"), equalTo("MyScript.java"));
 	}
 }

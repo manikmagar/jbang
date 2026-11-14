@@ -2,6 +2,7 @@ package dev.jbang.util;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.function.Function;
 
 import dev.jbang.Configuration;
 import dev.jbang.Settings;
@@ -55,13 +56,14 @@ public class ConfigUtil {
 	}
 
 	private static Path findNearestLocalConfig() {
-		return Util.findNearestFileWith(null, Configuration.JBANG_CONFIG_PROPS, p -> true);
+		return Util.findNearestWith(null, Util.acceptFile(Configuration.JBANG_CONFIG_PROPS));
 	}
 
 	private static Path findNearestLocalConfigWithKey(Path dir, String key) {
-		return Util.findNearestFileWith(dir, Configuration.JBANG_CONFIG_PROPS, configFile -> {
+		Function<Path, Path> accept = Util.acceptFile(Configuration.JBANG_CONFIG_PROPS);
+		return Util.findNearestWith(dir, accept.andThen(Util.notNull(configFile -> {
 			Configuration cfg = Configuration.read(configFile);
-			return cfg.containsKey(key);
-		});
+			return cfg.containsKey(key) ? configFile : null;
+		})));
 	}
 }

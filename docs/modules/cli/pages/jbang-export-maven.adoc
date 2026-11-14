@@ -1,0 +1,149 @@
+= JBANG EXPORT MAVEN
+
+== NAME
+
+jbang export maven -- Exports a Maven project
+
+== SYNOPSIS
+
+[source]
+----
+jbang export maven [OPTIONS] [<scriptOrFile>]
+----
+
+Generates a standalone Maven project (sources plus pom.xml with your
+dependencies) from a script, for when you outgrow jbang. Source files only.
+
+Examples:
+
+[source,bash]
+----
+jbang export maven hello.java
+jbang export maven -g org.acme -a hello -v 1.0 hello.java
+----
+
+
+== OPTIONS
+
+*-g*, *--group*=<group>::
+The group ID to use for the exported project.
+
+*-a*, *--artifact*=<artifact>::
+The artifact ID to use for the exported project.
+
+*-v*, *--version*=<version>::
+The version to use for the exported project.
+
+*-O*, *--output*=<output>::
+The name or path to use for the exported file.
+
+*--force*::
+Force export, i.e. overwrite exported file if already exists
+
+*-s*, *--sources*=<sources>::
+Add additional sources.
+
+*--files*=<files>::
+Add additional files.
+
+*-T*, *--source-type*=<source-type>::
+Force input to be interpreted as the given type. One of: java, jshell, kotlin, groovy, markdown.
+
+*--jsh*::
+Force input to be interpreted with jsh/jshell. Deprecated: use '--source-type jshell'
+
+*--catalog*=<catalog>::
+Path to catalog file to be used instead of the default
+
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
+
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
+
+*-j*, *--java*=<java>::
+JDK version to use for running the script.
+
+*-m*, *--main*=<main>::
+Main class to use when running. Used primarily for running jar's. Can be a glob pattern using ? and *.
+
+*--module*=<module>::
+Treat resource as a module. Optionally with the given module name
+
+*-C*, *--compile-option*=<compile-option>::
+Options to pass to the compiler
+
+*--manifest*=<key>=<value>::
+Add entry to the JAR manifest (e.g. --manifest=Main-Class=com.example.Main)
+
+*--[no-]integrations*::
+Enable or disable integration execution (default: true)
+
+*-D*=<key>=<value>::
+set a system property
++
+Default: `true`
+
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
+
+*--repos*=<repos>::
+Add additional repositories.
+
+*--cp*=<cp>::
+Add class path entries.
++
+Aliases: `--class-path`
+
+*--ignore-transitive-repositories*::
+Ignore remote repositories found in transitive dependencies
++
+Aliases: `--itr`
+
+*-n*, *--native*::
+Build using native-image
+
+*-N*, *--native-option*=<native-option>::
+Options to pass to the native image tool
+
+*--build-dir*=<build-dir>::
+Use given directory for build results
+
+*--enable-preview*::
+Activate Java preview features
+
+*-h*, *--help*::
+Display this help and exit
+
+*--config*=<config>::
+Path to config file to be used instead of the default
+
+*--insecure*::
+Enable insecure trust of all SSL certificates.
+
+*--[no-]verbose*::
+jbang will be verbose on what it does.
+
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
+
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
+
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
+
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
+
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
+
+*--no-netrc*::
+Disable .netrc authentication lookup.
+
+== ARGUMENTS
+
+*<scriptOrFile>*::
+A file or URL to a Java code file
+

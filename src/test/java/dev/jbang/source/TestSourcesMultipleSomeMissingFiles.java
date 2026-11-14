@@ -1,6 +1,8 @@
 package dev.jbang.source;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.iterableWithSize;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -11,13 +13,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.junit.Assume;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import dev.jbang.BaseTest;
-import dev.jbang.cli.ResourceNotFoundException;
+import dev.jbang.resources.ResourceRef;
 
 class TestSourcesMultipleSomeMissingFiles extends BaseTest {
 
@@ -104,9 +106,9 @@ class TestSourcesMultipleSomeMissingFiles extends BaseTest {
 		TestSource.createTmpFileWithContent(HiJBangPath.getParent(), "inner", "HelloInner.java",
 				classHelloInner);
 		String scriptURL = mainPath.toString();
-		ResourceRef resourceRef = ResourceRef.forNamedFile(scriptURL, mainPath);
+		ResourceRef resourceRef = ResourceRef.forResolvedResource(scriptURL, mainPath);
 		Source script = Source.forResourceRef(resourceRef, null);
-		Project prj = script.createProject();
+		Project prj = Project.builder().build(script);
 		List<ResourceRef> sources = prj.getMainSourceSet().getSources();
 		assertEquals(5, sources.size());
 		TreeSet<String> fileNames = new TreeSet<>();
@@ -140,9 +142,15 @@ class TestSourcesMultipleSomeMissingFiles extends BaseTest {
 		TestSource.createTmpFileWithContent(HiJBangPath.getParent(), "inner", "HelloInner.java",
 				classHelloInner);
 		String scriptURL = mainPath.toString();
-		ResourceRef resourceRef = ResourceRef.forNamedFile(scriptURL, mainPath);
+		ResourceRef resourceRef = ResourceRef.forResolvedResource(scriptURL, mainPath);
 		Source source = Source.forResourceRef(resourceRef, null);
-		Assertions.assertThrows(ResourceNotFoundException.class, source::createProject);
+		Project prj = Project.builder().build(source);
+		assertThat(prj.getMainSourceSet().getSources(), iterableWithSize(5));
+		assertThat(prj.getMainSourceSet()
+			.getSources()
+			.stream()
+			.filter(ref -> ref instanceof ResourceRef.UnresolvableResourceRef)
+			.collect(Collectors.toList()), iterableWithSize(1));
 	}
 
 }

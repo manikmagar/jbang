@@ -2,18 +2,21 @@ package dev.jbang.source.sources;
 
 import static dev.jbang.net.KotlinManager.resolveInKotlinHome;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
-import org.jboss.jandex.ClassInfo;
+import org.jspecify.annotations.NonNull;
 
 import dev.jbang.net.KotlinManager;
+import dev.jbang.resources.ResourceRef;
 import dev.jbang.source.*;
 import dev.jbang.source.AppBuilder;
 import dev.jbang.source.buildsteps.CompileBuildStep;
-import dev.jbang.source.buildsteps.IntegrationBuildStep;
-import dev.jbang.spi.IntegrationResult;
+import dev.jbang.source.parser.Directives;
+import dev.jbang.util.Util;
 
 public class KotlinSource extends Source {
 
@@ -22,35 +25,46 @@ public class KotlinSource extends Source {
 	}
 
 	@Override
+	public @NonNull Type getType() {
+		return Type.kotlin;
+	}
+
+	@Override
+	protected List<String> collectBinaryDependencies() {
+		final List<String> allDependencies = super.collectBinaryDependencies();
+		allDependencies.add("org.jetbrains.kotlin:kotlin-stdlib:" + getKotlinVersion());
+		return allDependencies;
+	}
+
+	@Override
 	protected List<String> getCompileOptions() {
-		return tagReader.collectOptions("COMPILE_OPTIONS");
+		return getDirectives().compileOptions();
 	}
 
 	@Override
 	protected List<String> getNativeOptions() {
-		return tagReader.collectOptions("NATIVE_OPTIONS");
+		return getDirectives().nativeOptions();
 	}
 
 	@Override
 	protected List<String> getRuntimeOptions() {
-		return tagReader.collectOptions("JAVA_OPTIONS", "RUNTIME_OPTIONS");
+		return getDirectives().runtimeOptions();
 	}
 
 	@Override
-	public Builder<Project> getBuilder(Project prj) {
-		return new KotlinAppBuilder(prj);
+	public Builder<CmdGeneratorBuilder> getBuilder(BuildContext ctx) {
+		return new KotlinAppBuilder(ctx);
 	}
 
 	public String getKotlinVersion() {
-		return tagReader.collectOptions("KOTLIN")
-						.stream()
-						.findFirst()
-						.orElse(KotlinManager.DEFAULT_KOTLIN_VERSION);
+		return getDirectives().collectDirectives(Directives.Names.KOTLIN)
+			.findFirst()
+			.orElse(KotlinManager.DEFAULT_KOTLIN_VERSION);
 	}
 
 	public static class KotlinAppBuilder extends AppBuilder {
-		public KotlinAppBuilder(Project project) {
-			super(project);
+		public KotlinAppBuilder(BuildContext ctx) {
+			super(ctx);
 		}
 
 		@Override
@@ -58,37 +72,33 @@ public class KotlinSource extends Source {
 			return new KotlinCompileBuildStep();
 		}
 
-		@Override
-		protected Builder<IntegrationResult> getIntegrationBuildStep() {
-			return new KotlinIntegrationBuildStep();
-		}
-
 		protected class KotlinCompileBuildStep extends CompileBuildStep {
 
 			public KotlinCompileBuildStep() {
-				super(KotlinAppBuilder.this.project);
+				super(KotlinAppBuilder.this.ctx);
 			}
 
 			@Override
-			protected String getCompilerBinary(String requestedJavaVersion) {
-				return resolveInKotlinHome("kotlinc", ((KotlinSource) project.getMainSource()).getKotlinVersion());
+			protected String getCompilerBinary() {
+				return resolveInKotlinHome("kotlinc",
+						((KotlinSource) ctx.getProject().getMainSource()).getKotlinVersion());
 			}
-		}
 
-		private class KotlinIntegrationBuildStep extends IntegrationBuildStep {
-			public KotlinIntegrationBuildStep() {
-				super(KotlinAppBuilder.this.project);
+			@Override
+			protected List<String> getCompileCommandOptions() throws IOException {
+				List<String> optionList = new ArrayList<>();
+				optionList.addAll(ctx.getProject().getMainSourceSet().getCompileOptions());
+				String path = ctx.resolveClassPath().getClassPath();
+				if (!Util.isBlankString(path)) {
+					optionList.addAll(Arrays.asList("-classpath", path));
+				}
+				optionList.addAll(Arrays.asList("-d", ctx.getCompileDir().toAbsolutePath().toString()));
+				return optionList;
 			}
 
 			@Override
 			protected String getMainExtension() {
-				return ".kt";
-			}
-
-			@Override
-			protected Predicate<ClassInfo> getMainFinder() {
-				return pubClass -> pubClass.method("main", IntegrationBuildStep.STRINGARRAYTYPE) != null
-						|| pubClass.method("main") != null;
+				return Type.kotlin.extension;
 			}
 		}
 	}

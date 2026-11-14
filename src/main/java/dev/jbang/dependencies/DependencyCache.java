@@ -9,11 +9,10 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -41,13 +40,18 @@ public class DependencyCache {
 						return new ArtifactInfo(gav, file, ts);
 					};
 					Gson parser = new GsonBuilder()
-													.setPrettyPrinting()
-													.registerTypeAdapter(ArtifactInfo.class, serializer)
-													.create();
+						.setPrettyPrinting()
+						.registerTypeAdapter(ArtifactInfo.class, serializer)
+						.create();
 
 					Type empMapType = new TypeToken<Map<String, List<ArtifactInfo>>>() {
 					}.getType();
-					depCache = parser.fromJson(out, empMapType);
+					Map<String, List<ArtifactInfo>> parsed = parser.fromJson(out, empMapType);
+					if (parsed == null) {
+						Util.warnMsg("Dependency cache file was empty or invalid: "
+								+ Settings.getCacheDependencyFile());
+					}
+					depCache = parsed != null ? parsed : new HashMap<>();
 				} catch (IOException e) {
 					Util.errorMsg("Issue writing to dependency cache", e);
 					depCache = new HashMap<>();
@@ -65,20 +69,43 @@ public class DependencyCache {
 		Map<String, List<ArtifactInfo>> cache = getCache();
 		cache.put(depsHash, artifacts);
 
-		try (Writer out = Files.newBufferedWriter(Settings.getCacheDependencyFile())) {
-			JsonSerializer<ArtifactInfo> serializer = (src, typeOfSrc, context) -> {
-				JsonObject json = new JsonObject();
-				json.addProperty("gav", src.getCoordinate().toCanonicalForm());
-				json.addProperty("file", src.getFile().toString());
-				json.addProperty("ts", src.getTimestamp());
-				return json;
-			};
-			Gson parser = new GsonBuilder()
-											.setPrettyPrinting()
-											.registerTypeAdapter(ArtifactInfo.class, serializer)
-											.create();
+		Path cacheFile = Settings.getCacheDependencyFile();
+		Path cacheDir = cacheFile.getParent();
 
-			parser.toJson(cache, out);
+		try {
+			if (cacheDir != null) {
+				Files.createDirectories(cacheDir);
+			}
+
+			Path tmpFile = Files.createTempFile(
+					cacheDir != null ? cacheDir : cacheFile.toAbsolutePath().getParent(),
+					cacheFile.getFileName().toString(),
+					".tmp");
+
+			try (Writer out = Files.newBufferedWriter(tmpFile)) {
+				JsonSerializer<ArtifactInfo> serializer = (src, typeOfSrc, context) -> {
+					JsonObject json = new JsonObject();
+					json.addProperty("gav", src.getCoordinate().toCanonicalForm());
+					json.addProperty("file", src.getFile().toString());
+					json.addProperty("ts", src.getTimestamp());
+					return json;
+				};
+				Gson parser = new GsonBuilder()
+					.setPrettyPrinting()
+					.registerTypeAdapter(ArtifactInfo.class, serializer)
+					.create();
+
+				parser.toJson(cache, out);
+			}
+
+			try {
+				Files.move(tmpFile, cacheFile,
+						StandardCopyOption.ATOMIC_MOVE,
+						StandardCopyOption.REPLACE_EXISTING);
+			} catch (IOException e) {
+				// Fallback when atomic move not supported (e.g. across filesystems/drives)
+				Files.move(tmpFile, cacheFile, StandardCopyOption.REPLACE_EXISTING);
+			}
 		} catch (IOException e) {
 			Util.errorMsg("Issue writing to dependency cache", e);
 		}
@@ -95,19 +122,20 @@ public class DependencyCache {
 				return cachedCP;
 			} else {
 				warnMsg("Detected missing or out-of-date dependencies in cache.");
+				if (Util.isVerbose()) {
+					cachedCP.stream().filter(ai -> !ai.isUpToDate()).forEach(ai -> {
+						if (Files.isReadable(ai.getFile())) {
+							Util.verboseMsg(
+									"   Artifact out of date: " + ai.getFile() + " : " + ai.getTimestamp() + " != "
+											+ ai.getFile().toFile().lastModified());
+						} else {
+							Util.verboseMsg("   Artifact not found in local cache: " + ai.getFile());
+						}
+					});
+				}
 			}
 		}
 		return null;
-	}
-
-	public static ArtifactInfo findArtifactByPath(Path artifactPath) {
-		Map<String, List<ArtifactInfo>> cache = getCache();
-		Optional<ArtifactInfo> result = cache	.values()
-												.stream()
-												.flatMap(Collection::stream)
-												.filter(art -> art.getFile().equals(artifactPath))
-												.findFirst();
-		return result.orElseGet(() -> new ArtifactInfo(null, artifactPath));
 	}
 
 	public static void clear() {

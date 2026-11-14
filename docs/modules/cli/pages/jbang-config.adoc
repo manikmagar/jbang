@@ -1,76 +1,67 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-config(1)
+= JBANG CONFIG
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang config -- Read and write configuration options.
 
-jbang-config - Read and write configuration options.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang config [OPTIONS] [COMMAND]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Reads and writes jbang settings in jbang.properties. A setting named
+`<command>.<option>` becomes the default for that option, e.g. `edit.open`.
+Changes go to the nearest config file unless you choose --global or --file.
 
-*jbang config* *-o* *--fresh* *--quiet* *--verbose* [COMMAND]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang config list
+jbang config set edit.open code
+jbang config get edit.open
+jbang config unset edit.open
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Read and write configuration options.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-commands[]
-== Commands
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-xref:jbang-config-get.adoc[*get*]::
-  Get a configuration value
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-xref:jbang-config-set.adoc[*set*]::
-  Set a configuration value
+== COMMANDS
 
-xref:jbang-config-unset.adoc[*unset*]::
-  Remove a configuration value
+* xref:jbang:cli:jbang-config-get.adoc[*get*] - Get a configuration value
+* xref:jbang:cli:jbang-config-set.adoc[*set*] - Set a configuration value
+* xref:jbang:cli:jbang-config-unset.adoc[*unset*] - Remove a configuration value
+* xref:jbang:cli:jbang-config-list.adoc[*list*] - List active configuration values
 
-xref:jbang-config-list.adoc[*list*]::
-  List active configuration values
-
-// end::picocli-generated-man-section-commands[]
-
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

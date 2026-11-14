@@ -1,62 +1,48 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-trust-list(1)
+= JBANG TRUST LIST
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang trust list -- Show defined trust domains.
 
-jbang-trust-list - Show defined trust domains.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang trust list [OPTIONS]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+== OPTIONS
 
-*jbang trust list* *-o* *--fresh* *--quiet* *--verbose*
+*--format*=<format>::
+Specify output format ('text' or 'json')
 
-// end::picocli-generated-man-section-synopsis[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-description[]
-== Description
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-Show defined trust domains.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// end::picocli-generated-man-section-description[]
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// end::picocli-generated-man-section-options[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
-
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
-
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

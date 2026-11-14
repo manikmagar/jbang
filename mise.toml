@@ -1,0 +1,3 @@
+[tools]
+java = "graalvm-community-25"
+just = "latest"

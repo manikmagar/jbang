@@ -1,196 +1,204 @@
 package dev.jbang.cli;
 
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Stack;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import org.aesh.command.CommandDefinition;
+import org.aesh.command.option.Arguments;
+import org.aesh.command.option.Mixin;
+import org.aesh.command.option.Option;
+
+import dev.jbang.ExitException;
+import dev.jbang.resources.resolvers.AliasResourceResolver;
+import dev.jbang.resources.resolvers.LiteralScriptResourceResolver;
+import dev.jbang.source.BuildContext;
+import dev.jbang.source.CmdGeneratorBuilder;
 import dev.jbang.source.Project;
 import dev.jbang.source.ProjectBuilder;
 import dev.jbang.source.Source;
-import dev.jbang.source.resolvers.LiteralScriptResourceResolver;
 import dev.jbang.util.Util;
 
-import picocli.CommandLine;
-
-@CommandLine.Command(name = "run", description = "Builds and runs provided script.")
+@CommandDefinition(name = "run", description = "Builds and runs provided script. (default command)", stopAtFirstPositional = true, helpGroup = "Essentials")
 public class Run extends BaseBuildCommand {
 
-	@CommandLine.Option(names = { "-R", "--runtime-option",
-			"--java-options" }, description = "Options to pass to the Java runtime")
-	public List<String> javaRuntimeOptions;
+	/**
+	 * A PrintStream that always writes to the real stdout, bypassing any
+	 * System.setOut() redirection. Used to output the command line for the parent
+	 * process to execute.
+	 */
+	public PrintStream realOut = new PrintStream(new FileOutputStream(FileDescriptor.out));
 
-	@CommandLine.Option(names = {
-			"--jfr" }, fallbackValue = "${jbang.run.jfr}", parameterConsumer = KeyValueFallbackConsumer.class, arity = "0..1", description = "Launch with Java Flight Recorder enabled.")
-	public String flightRecorderString;
+	@Mixin
+	public RunMixin runMixin;
 
-	@CommandLine.Option(names = { "-d",
-			"--debug" }, fallbackValue = "${jbang.run.debug}", parameterConsumer = DebugFallbackConsumer.class, arity = "0..1", description = "Launch with java debug enabled on specified port (default: ${FALLBACK-VALUE}) ")
-	public String debugString;
+	@Option(shortName = 'c', name = "code", fallbackValue = "", helpGroup = "Source options", description = "Run the given string as code")
+	public String literalScript;
 
-	// should take arguments for package/classes when picocli fixes its flag
-	// handling bug in release 4.6.
-	// https://docs.oracle.com/cd/E19683-01/806-7930/assert-4/index.html
-	@CommandLine.Option(names = { "--enableassertions", "--ea" }, description = "Enable assertions")
-	public boolean enableAssertions;
-
-	@CommandLine.Option(names = { "--enablesystemassertions", "--esa" }, description = "Enable system assertions")
-	public boolean enableSystemAssertions;
-
-	@CommandLine.Option(names = { "--manifest" }, parameterConsumer = KeyValueConsumer.class)
-	public Map<String, String> manifestOptions;
-
-	@CommandLine.Option(names = { "--javaagent" }, parameterConsumer = KeyValueConsumer.class)
-	public Map<String, String> javaAgentSlots;
-
-	@CommandLine.Option(names = {
-			"--cds" }, description = "If specified Class Data Sharing (CDS) will be used for building and running (requires Java 13+)", negatable = true)
-	Boolean cds;
-
-	@CommandLine.Option(names = { "-i", "--interactive" }, description = "Activate interactive mode")
-	public boolean interactive;
-
-	@CommandLine.Option(names = { "-c",
-			"--code" }, arity = "0..1", description = "Run the given string as code", preprocessor = StrictParameterPreprocessor.class)
-	public Optional<String> literalScript;
-
-	@CommandLine.Parameters(index = "1..*", arity = "0..*", description = "Parameters to pass on to the script")
+	@Arguments(paramLabel = "userParams", index = "1..*", arity = "0..*", description = "Parameters for the script")
 	public List<String> userParams = new ArrayList<>();
 
-	protected void requireScriptArgument() {
-		if (scriptMixin.scriptOrFile == null && ((!interactive && !literalScript.isPresent())
-				|| (literalScript.isPresent() && literalScript.get().isEmpty()))) {
-			throw new IllegalArgumentException("Missing required parameter: '<scriptOrFile>'");
+	@Override
+	protected void validateArguments() {
+		// run allows no script when in interactive mode or when running literal code
+		if (scriptMixin.scriptOrFile == null && ((runMixin.interactive != Boolean.TRUE && literalScript == null)
+				|| (literalScript != null && literalScript.isEmpty()))) {
+			printCommandHelp();
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<scriptOrFile>'");
+		}
+	}
+
+	private void rewriteScriptArguments() {
+		if (literalScript != null && !literalScript.isEmpty()
+				&& scriptMixin.scriptOrFile != null) {
+			List<String> args = new ArrayList<>();
+			args.add(scriptMixin.scriptOrFile);
+			if (userParams != null) {
+				args.addAll(userParams);
+			}
+			userParams = args;
 		}
 	}
 
 	@Override
 	public Integer doCall() throws IOException {
-		requireScriptArgument();
-		String scriptOrFile = scriptMixin.scriptOrFile;
+		rewriteScriptArguments();
+		userParams = handleRemoteFiles(userParams);
+		String script = scriptMixin.scriptOrFile;
 
-		ProjectBuilder pb = createProjectBuilder();
+		ProjectBuilder pb = createProjectBuilderForRun();
+
 		Project prj;
-		if (literalScript.isPresent()) {
-			String script;
-			if (!literalScript.get().isEmpty()) {
-				script = literalScript.get();
-				if (scriptOrFile != null) {
-					List<String> args = new ArrayList<>();
-					args.add(scriptOrFile);
-					args.addAll(pb.getArguments());
-					pb.setArguments(args);
-				}
+		if (literalScript != null) {
+			String code;
+			if (!literalScript.isEmpty()) {
+				code = literalScript;
 			} else {
-				script = scriptOrFile;
+				code = script;
 			}
-			Util.verboseMsg("Literal Script to execute: '" + script + "'");
-			prj = pb.build(LiteralScriptResourceResolver.stringToResourceRef(null, script));
+			Util.verboseMsg("Literal Script to execute: '" + code + "'");
+			prj = pb.build(LiteralScriptResourceResolver.stringToResourceRef(null, code, scriptMixin.getForceType()));
 		} else {
-			if (scriptOrFile != null) {
-				prj = pb.build(scriptOrFile);
+			if (script != null) {
+				prj = pb.build(script);
 			} else {
 				// HACK it's a crappy way to work around the fact that in the case of
 				// interactive we might not have a file to reference but all the code
 				// expects one to exist
-				prj = pb.build(LiteralScriptResourceResolver.stringToResourceRef(null, ""));
+				prj = pb.build(LiteralScriptResourceResolver.stringToResourceRef(null, "", scriptMixin.getForceType()));
 			}
 		}
 
-		prj.builder().build();
-
-		if (nativeImage && (scriptMixin.forceType == Source.Type.jshell || prj.isJShell())) {
+		if (Boolean.TRUE.equals(nativeMixin.nativeImage)
+				&& (scriptMixin.getForceType() == Source.Type.jshell || prj.isJShell())) {
 			warn(".jsh cannot be used with --native thus ignoring --native.");
-			pb.nativeImage(false);
+			prj.setNativeImage(false);
 		}
 
-		String cmdline = prj.cmdGenerator().generate();
-		debug("run: " + cmdline);
-		out.println(cmdline);
+		BuildContext ctx = BuildContext.forProject(prj, getBuildDir());
+		CmdGeneratorBuilder genb = Project.codeBuilder(ctx).build();
 
-		return EXIT_EXECUTE;
+		buildAgents(ctx);
+
+		String cmdline = updateGeneratorForRun(genb).build().generate();
+
+		Util.verboseMsg("run: " + cmdline);
+		realOut.println(cmdline);
+
+		return ExitException.EXIT_EXECUTE;
 	}
 
-	ProjectBuilder createProjectBuilder() {
-		ProjectBuilder pb = super.createProjectBuilder()
-														.setArguments(userParams)
-														.runtimeOptions(javaRuntimeOptions)
-														.interactive(interactive)
-														.enableAssertions(enableAssertions)
-														.enableSystemAssertions(enableSystemAssertions)
-														.flightRecorderString(flightRecorderString)
-														.debugString(debugString)
-														.classDataSharing(cds);
-		if (javaAgentSlots != null) {
-			for (Map.Entry<String, String> agentOption : javaAgentSlots.entrySet()) {
+	void buildAgents(BuildContext ctx) throws IOException {
+		Project prj = ctx.getProject();
+		Map<String, String> agents = runMixin.getJavaAgentSlots();
+		if (agents == null && prj.getResourceRef() instanceof AliasResourceResolver.AliasedResourceRef) {
+			AliasResourceResolver.AliasedResourceRef aref = (AliasResourceResolver.AliasedResourceRef) prj
+				.getResourceRef();
+			if (aref.getAlias().javaAgents != null) {
+				Map<String, String> tmpAgents = new HashMap<>();
+				aref.getAlias().javaAgents.forEach(a -> tmpAgents.put(a.agentRef, a.options));
+				agents = tmpAgents;
+			}
+		}
+		if (agents != null) {
+			if (runMixin.javaRuntimeOptions == null) {
+				runMixin.javaRuntimeOptions = new ArrayList<>();
+			}
+			agents = handleRemoteFiles(agents);
+			for (Map.Entry<String, String> agentOption : agents.entrySet()) {
 				String javaAgent = agentOption.getKey();
 				String javaAgentOptions = agentOption.getValue();
-				ProjectBuilder apb = super.createProjectBuilder();
+				ProjectBuilder apb = createBaseProjectBuilder();
 				Project aprj = apb.build(javaAgent);
-				aprj.addRuntimeOption("-javaagent:" + aprj.getJarFile()
-						+ (javaAgentOptions != null ? "=" + javaAgentOptions : ""));
-				pb.addJavaAgent(aprj);
+				BuildContext actx = BuildContext.forProject(aprj);
+				Project.codeBuilder(actx).build();
+				runMixin.javaRuntimeOptions.addAll(javaAgentOptions(actx, javaAgentOptions));
 			}
 		}
-		return pb;
 	}
 
-	/**
-	 * Helper class to peek ahead at `--debug` to pickup --debug=5000, --debug 5000,
-	 * --debug *:5000 as debug parameters but not --debug somefile.java
-	 */
-	static class DebugFallbackConsumer extends PatternFallbackConsumer {
-		private static final Pattern p = Pattern.compile("(.*?:)?(\\d+)");
-
-		@Override
-		protected Pattern getValuePattern() {
-			return p;
-		}
+	private List<String> javaAgentOptions(BuildContext agentCtx, String agentOptions) {
+		return Collections.singletonList(
+				"-javaagent:" + agentCtx.getJarFile()
+						+ (agentOptions != null && !agentOptions.isEmpty() ? "=" + agentOptions : ""));
 	}
 
-	/**
-	 * Helper class to peek ahead at `--jfr` to pickup x=y,t=y but not --jfr
-	 * somefile.java
-	 */
-	static class KeyValueFallbackConsumer extends PatternFallbackConsumer {
-		private static final Pattern p = Pattern.compile("(\\S*?)=(\\S+)");
-
-		@Override
-		protected Pattern getValuePattern() {
-			return p;
-		}
+	ProjectBuilder createProjectBuilderForRun() {
+		return createBaseProjectBuilder();
 	}
 
-	static abstract class PatternFallbackConsumer implements CommandLine.IParameterConsumer {
+	CmdGeneratorBuilder updateGeneratorForRun(CmdGeneratorBuilder gb) {
+		gb
+			.setArguments(userParams)
+			.runtimeOptions(runMixin.javaRuntimeOptions)
+			.mainClass(buildMixin.main)
+			.moduleName(buildMixin.module)
+			.interactive(runMixin.interactive)
+			.enableAssertions(runMixin.enableAssertions)
+			.enableSystemAssertions(runMixin.enableSystemAssertions)
+			.flightRecorderString(runMixin.flightRecorderString)
+			.debugString(runMixin.debugString)
+			.classDataSharing(runMixin.getCds());
 
-		protected abstract Pattern getValuePattern();
+		return gb;
+	}
 
-		@Override
-		public void consumeParameters(Stack<String> args, CommandLine.Model.ArgSpec argSpec,
-				CommandLine.Model.CommandSpec commandSpec) {
-			Matcher m = getValuePattern().matcher(args.peek());
-			if (m.matches()) {
-				argSpec.setValue(args.pop());
-			} else {
-				String val, name;
-				if (argSpec.isOption()) {
-					CommandLine.Model.OptionSpec opt = (CommandLine.Model.OptionSpec) argSpec;
-					name = opt.longestName();
-					val = opt.fallbackValue();
-				} else {
-					name = argSpec.paramLabel();
-					val = null;
-				}
-				try {
-					argSpec.setValue(val);
-				} catch (Exception badValue) {
-					throw new CommandLine.InitializationException("Value for " + name + " must be an string", badValue);
-				}
-			}
-		}
+	private static List<String> handleRemoteFiles(List<String> args) {
+		return args.stream().map(Util::substituteRemote).collect(Collectors.toList());
+	}
+
+	private static Map<String, String> handleRemoteFiles(Map<String, String> slots) {
+		Map<String, String> result = new HashMap<>();
+		slots.forEach((key, value) -> result.put(key, Util.substituteRemote(value)));
+		return result;
+	}
+
+	@Override
+	public String prose() {
+		return "Runs code from almost anywhere: a Maven artifact (GAV coordinate), a `.jar`,\n"
+				+ "a catalog alias, a URL, or a local script in Java, JShell, Kotlin, Groovy\n"
+				+ "or Markdown. jbang resolves any dependencies, builds when needed, then runs it.\n"
+				+ "\n"
+				+ "run is the default command, so `jbang <resource>` is shorthand for\n"
+				+ "`jbang run <resource>`. Anything after the resource is passed to it as\n"
+				+ "arguments rather than to jbang.";
+	}
+
+	@Override
+	public List<String> examples() {
+		return Arrays.asList(
+				"${COMMAND-FULL-NAME} org.example:myapp:1.2.3",
+				"${COMMAND-FULL-NAME} myapp.jar",
+				"${COMMAND-FULL-NAME} gavsearch@jbangdev org.slf4j:slf4j-api",
+				"${COMMAND-FULL-NAME} hello.java",
+				"${COMMAND-FULL-NAME} -c 'System.out.println(\"hi\")'");
 	}
 }

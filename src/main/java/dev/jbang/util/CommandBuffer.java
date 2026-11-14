@@ -13,12 +13,18 @@ import java.util.stream.Collectors;
 
 public class CommandBuffer {
 	private List<String> arguments;
+	private Util.Shell shell = Util.getShell();
+
+	// 8192 character command line length limit imposed by CMD.EXE
+	public static final int MAX_LENGTH_WINCLI = 8000;
+	// Windows API has a limit of 32,768 characters for the lpCommandLine parameter
+	public static final int MAX_LENGTH_WINPROCBUILDER = 32000;
 
 	// NB: This might not be a definitive list of safe characters
 	// cmdSafeChars = Pattern.compile("[^\\Q&()[]{}^=;!'+,`~<>|\\E]*");
-	static Pattern cmdSafeChars = Pattern.compile("[a-zA-Z0-9.,_+=:;@()-]*");
+	static Pattern cmdSafeChars = Pattern.compile("[a-zA-Z0-9.,_+=:;@()-\\\\]*");
 	// TODO: Figure out what the real list of safe characters is for PowerShell
-	static Pattern pwrSafeChars = Pattern.compile("[a-zA-Z0-9.,_+=:;@()-]*");
+	static Pattern pwrSafeChars = Pattern.compile("[a-zA-Z0-9_+=@\\\\-]*");
 	static Pattern shellSafeChars = Pattern.compile("[a-zA-Z0-9._+=:@%/-]*");
 
 	static Pattern cmdNeedQuotesChars = Pattern.compile("[\\Q&()[]{}^=;!'+,`~\\E]");
@@ -47,28 +53,27 @@ public class CommandBuffer {
 		this.arguments = new ArrayList<>(Arrays.asList(arguments));
 	}
 
-	public ProcessBuilder asProcessBuilder() {
-		return asProcessBuilder(Util.getShell());
+	public CommandBuffer shell(Util.Shell shell) {
+		this.shell = shell;
+		return this;
 	}
 
-	public ProcessBuilder asProcessBuilder(Util.Shell shell) {
-		List<String> args = arguments	.stream()
-										.map(a -> escapeProcessBuilderArgument(a, shell))
-										.collect(Collectors.toList());
+	public ProcessBuilder asProcessBuilder() {
+		List<String> args = arguments.stream()
+			.map(a -> escapeProcessBuilderArgument(a, shell))
+			.collect(Collectors.toList());
 		return new ProcessBuilder(args);
 	}
 
 	public String asCommandLine() {
-		return asCommandLine(Util.getShell());
-	}
-
-	public String asCommandLine(Util.Shell shell) {
 		return String.join(" ", escapeShellArguments(arguments, shell));
 	}
 
-	public String asJavaArgsFile(Util.Shell shell) throws IOException {
+	public CommandBuffer usingArgsFile() throws IOException {
+		if (arguments.size() < 2 || arguments.get(1).startsWith("@")) {
+			return this;
+		}
 		// @-files avoid problems on Windows with very long command lines
-		final String cmd = escapeShellArgument(arguments.get(0), shell);
 		final Path argsFile = Files.createTempFile("jbang", ".args");
 		try (PrintWriter pw = new PrintWriter(argsFile.toFile())) {
 			// write all arguments except the first to the file
@@ -76,7 +81,51 @@ public class CommandBuffer {
 				pw.println(escapeArgsFileArgument(arguments.get(i)));
 			}
 		}
-		return cmd + " @" + argsFile;
+		return CommandBuffer.of(arguments.get(0), "@" + argsFile);
+	}
+
+	/**
+	 * Determines if it's necessary to switch to an args file depending on the OS
+	 * and Shell being used and the command to run.
+	 * 
+	 * @return either this <code>CommandBuffer</code> or a new one using an args
+	 *         file.
+	 * @throws IOException throws an exception if the args file could not be
+	 *                     created.
+	 */
+	public CommandBuffer applyWindowsMaxProcessLimit() throws IOException {
+		String cmd = arguments.get(0).toLowerCase();
+		if (cmd.endsWith(".bat") || cmd.endsWith(".cmd")) {
+			return applyWindowsMaxCliLimit();
+		}
+		return applyWindowsMaxLengthLimit(MAX_LENGTH_WINPROCBUILDER);
+	}
+
+	/**
+	 * Determines if it's necessary to switch to an args file depending on the OS
+	 * being used. Use this when its known beforehand that on Windows the command
+	 * can only use the more limited command size available to the command line
+	 * (about 8Kb). This is normally the case when trying to run batch files for
+	 * example. But in the case of JBang it's also used when returning the command
+	 * that should be executed by the startup script.
+	 * 
+	 * @return either this <code>CommandBuffer</code> or a new one using an args
+	 *         file.
+	 * @throws IOException throws an exception if the args file could not be
+	 *                     created.
+	 */
+	public CommandBuffer applyWindowsMaxCliLimit() throws IOException {
+		return applyWindowsMaxLengthLimit(MAX_LENGTH_WINCLI);
+	}
+
+	private CommandBuffer applyWindowsMaxLengthLimit(int maxLength) throws IOException {
+		String args = asCommandLine();
+		// Check if we can and need to use @-files on Windows
+		if (args.length() > maxLength && Util.isWindows()) {
+			return usingArgsFile();
+		} else {
+			return this;
+		}
 	}
 
 	/**
@@ -101,6 +150,12 @@ public class CommandBuffer {
 
 	private static String escapeBashArgument(String arg) {
 		if (!shellSafeChars.matcher(arg).matches()) {
+			// We need to use single quoting to prevent any form of expansion.
+			// But to be able to use single quotes inside the argument we need
+			// to escape them with a backslash. But if we are already using
+			// single quotes then we can not use escapes. To fix that we use
+			// a concatenation of single quoted strings with escaped single
+			// quotes in between.
 			arg = arg.replaceAll("(['])", "'\\\\''");
 			arg = "'" + arg + "'";
 		}
@@ -141,7 +196,7 @@ public class CommandBuffer {
 		// argument, this is close to impossible to handle on Windows.
 		// (see
 		// https://stackoverflow.com/questions/30157414/batch-argument-with-quotes-and-spaces)
-		if (shell != Util.Shell.bash && cmdNeedQuotesChars.matcher(arg).find()) {
+		if (Util.isWindows() && cmdNeedQuotesChars.matcher(arg).find()) {
 			arg = "\"" + arg + "\"";
 		}
 		return arg;

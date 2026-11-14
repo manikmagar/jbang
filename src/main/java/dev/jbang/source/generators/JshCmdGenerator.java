@@ -8,46 +8,67 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringEscapeUtils;
 
+import dev.jbang.devkitman.Jdk;
+import dev.jbang.resources.ResourceRef;
 import dev.jbang.source.*;
 import dev.jbang.util.JavaUtil;
 import dev.jbang.util.Util;
 
 public class JshCmdGenerator extends BaseCmdGenerator<JshCmdGenerator> {
-	private final Project project;
+	private List<String> runtimeOptions = Collections.emptyList();
 	private boolean interactive;
+	private String mainClass;
+
+	public JshCmdGenerator runtimeOptions(List<String> runtimeOptions) {
+		if (runtimeOptions != null) {
+			this.runtimeOptions = runtimeOptions;
+		} else {
+			this.runtimeOptions = Collections.emptyList();
+		}
+		return this;
+	}
 
 	public JshCmdGenerator interactive(boolean interactive) {
 		this.interactive = interactive;
 		return this;
 	}
 
-	public JshCmdGenerator(Project project) {
-		this.project = project;
+	public JshCmdGenerator mainClass(String mainClass) {
+		this.mainClass = mainClass;
+		return this;
 	}
 
-	@Override
-	protected Project getProject() {
-		return project;
+	public JshCmdGenerator(BuildContext ctx) {
+		super(ctx);
 	}
 
 	@Override
 	protected List<String> generateCommandLineList() throws IOException {
 		List<String> fullArgs = new ArrayList<>();
 
-		String classpath = project.resolveClassPath().getClassPath();
+		Project project = ctx.getProject();
+		String classpath = ctx.resolveClassPath().getClassPath();
 
 		List<String> optionalArgs = new ArrayList<>();
 
-		String requestedJavaVersion = getProject().getJavaVersion();
-		String javacmd;
-		javacmd = JavaUtil.resolveInJavaHome("jshell", requestedJavaVersion);
+		Jdk jdk = project.projectJdk();
+		String javacmd = JavaUtil.resolveInJavaHome("jshell", jdk);
 
 		// NB: See https://github.com/jbangdev/jbang/issues/992 for the reasons why we
 		// use the -J flags below
+
+		if (project.enablePreview()) {
+			// jshell does not seem to automaticall pass enable-preview to runtime/compiler
+			optionalArgs.add("--enable-preview");
+			// only required because --execution=local cause it to break otherwise.
+			optionalArgs.add("-J--enable-preview");
+			optionalArgs.add("-C--enable-preview");
+		}
 
 		optionalArgs.add("--execution=local");
 		optionalArgs.add("-J--add-modules=ALL-SYSTEM");
@@ -68,17 +89,17 @@ public class JshCmdGenerator extends BaseCmdGenerator<JshCmdGenerator> {
 				"import java.net.*;" +
 				"import java.math.BigInteger;\n" +
 				"import java.math.BigDecimal;\n";
-		String mainClass = project.getMainClass();
+		String main = Optional.ofNullable(mainClass).orElse(project.getMainClass());
 		Util.writeString(tempFile,
 				defaultImports + generateArgs(arguments, project.getProperties()) +
 						generateStdInputHelper() +
-						generateMain(mainClass));
-		if (mainClass != null) {
-			if (!mainClass.contains(".")) {
-				Util.warnMsg("Main class `" + mainClass
+						generateMain(main));
+		if (main != null) {
+			if (!main.contains(".")) {
+				Util.warnMsg("Main class `" + main
 						+ "` is in the default package which JShell unfortunately does not support. You can still use JShell to explore the JDK and any dependencies available on the classpath.");
 			} else {
-				Util.infoMsg("You can run the main class `" + mainClass + "` using: userMain(args)");
+				Util.infoMsg("You can run the main class `" + main + "` using: userMain(args)");
 			}
 		}
 		optionalArgs.add("--startup=" + tempFile.toAbsolutePath());
@@ -91,10 +112,11 @@ public class JshCmdGenerator extends BaseCmdGenerator<JshCmdGenerator> {
 		}
 
 		fullArgs.add(javacmd);
-		addAgentsArgs(fullArgs);
 
 		fullArgs.addAll(jshellOpts(project.getRuntimeOptions()));
-		fullArgs.addAll(project.resolveClassPath().getAutoDectectedModuleArguments(requestedJavaVersion));
+		fullArgs.addAll(jshellOpts(runtimeOptions));
+		fullArgs.addAll(ctx.resolveClassPath()
+			.getAutoDectectedModuleArguments(jdk));
 		fullArgs.addAll(optionalArgs);
 
 		if (project.isJShell()) {
@@ -128,10 +150,10 @@ public class JshCmdGenerator extends BaseCmdGenerator<JshCmdGenerator> {
 				+
 				" }" +
 				(properties.isEmpty() ? "" : "\n") +
-				properties	.entrySet()
-							.stream()
-							.map(x -> "System.setProperty(\"" + x.getKey() + "\",\"" + x.getValue() + "\");")
-							.collect(Collectors.joining("\n"));
+				properties.entrySet()
+					.stream()
+					.map(x -> "System.setProperty(\"" + x.getKey() + "\",\"" + x.getValue() + "\");")
+					.collect(Collectors.joining("\n"));
 		return buf;
 	}
 

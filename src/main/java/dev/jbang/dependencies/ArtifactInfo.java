@@ -4,6 +4,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 
+import dev.jbang.util.ModuleUtil;
+
 /**
  * class describing artifact coordinates and its resolved physical location.
  */
@@ -37,8 +39,31 @@ public class ArtifactInfo {
 		return timestamp;
 	}
 
+	public boolean isModule() {
+		return isModule(file);
+	}
+
+	public static boolean isModule(Path file) {
+		return ModuleUtil.isModule(file);
+	}
+
+	public String getModuleName() {
+		return getModuleName(file);
+	}
+
+	public static String getModuleName(Path file) {
+		return ModuleUtil.getModuleName(file);
+	}
+
 	public boolean isUpToDate() {
-		return Files.isReadable(file) && timestamp == file.toFile().lastModified();
+		// This overly complex test is because some older Java versions seem to return
+		// file timestamps with the last three digits set to 0. If we run Jbang on the
+		// same script with different JDKs we get continuous Maven resolves because it
+		// stores the result with slightly different timestamps. In this way we allow
+		// timestamps to be slightly "off" and we'll still assume the artifact to be
+		// up-to-date.
+		long ts = file.toFile().lastModified();
+		return Files.isReadable(file) && (timestamp == ts || (ts % 1000 == 0 && timestamp / 1000 == ts / 1000));
 	}
 
 	public String toString() {

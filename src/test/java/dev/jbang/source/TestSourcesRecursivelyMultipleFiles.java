@@ -10,6 +10,7 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 import dev.jbang.BaseTest;
+import dev.jbang.resources.ResourceRef;
 
 class TestSourcesRecursivelyMultipleFiles extends BaseTest {
 
@@ -77,9 +78,9 @@ class TestSourcesRecursivelyMultipleFiles extends BaseTest {
 		TestSource.createTmpFileWithContent(HiJBangPath.getParent(), "inner", "HelloInner.java",
 				classHelloInner);
 		String scriptURL = mainPath.toString();
-		ResourceRef resourceRef = ResourceRef.forNamedFile(scriptURL, mainPath);
+		ResourceRef resourceRef = ResourceRef.forResolvedResource(scriptURL, mainPath);
 		Source script = Source.forResourceRef(resourceRef, null);
-		Project prj = script.createProject();
+		Project prj = Project.builder().build(script);
 		List<ResourceRef> sources = prj.getMainSourceSet().getSources();
 		assertEquals(5, sources.size());
 		TreeSet<String> fileNames = new TreeSet<>();

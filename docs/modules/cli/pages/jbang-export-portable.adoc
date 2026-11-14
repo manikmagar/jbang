@@ -1,104 +1,140 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-export-portable(1)
+= JBANG EXPORT PORTABLE
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang export portable -- Exports jar together with dependencies in way that makes it portable
 
-jbang-export-portable - Exports jar together with dependencies in way that makes it portable
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang export portable [OPTIONS] [<scriptOrFile>]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Exports a jar plus a lib/ folder holding its dependencies. Copy both together
+and run it anywhere with `java -jar`.
 
-*jbang export portable* *-o* [*-hn*] [*--force*] *--fresh* [*--insecure*] *--quiet* *--verbose*
-                      [*--config*=_<config>_] [*-j*=_<javaVersion>_] [*-O*=_<outputFile>_]
-                      [*--cp*=_<classpaths>_]... [*-D*=_<String=String>_]...
-                      [*--deps*=_<dependencies>_]... [*--repos*=_<repositories>_]...
-                      _scriptOrFile_
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang export portable hello.java
+jbang export portable -O dist/hello.jar hello.java
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Exports jar together with dependencies in way that makes it portable
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
-
-// tag::picocli-generated-man-section-options[]
-== Options
-
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
-
-*--cp, --class-path*=_<classpaths>_::
-  Add class path entries.
-
-*-D*, _<String=String>_::
-  set a system property
-
-*--deps*=_<dependencies>_::
-  Add additional dependencies (Use commas to separate them).
+*-O*, *--output*=<output>::
+The name or path to use for the exported file.
 
 *--force*::
-  Force export, i.e. overwrite exported file if already exists
+Force export, i.e. overwrite exported file if already exists
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*-s*, *--sources*=<sources>::
+Add additional sources.
 
-*-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
+*--files*=<files>::
+Add additional files.
 
-*--insecure*::
-  Enable insecure trust of all SSL certificates.
+*-T*, *--source-type*=<source-type>::
+Force input to be interpreted as the given type. One of: java, jshell, kotlin, groovy, markdown.
 
-*-j*, *--java*=_<javaVersion>_::
-  JDK version to use for running the script.
+*--jsh*::
+Force input to be interpreted with jsh/jshell. Deprecated: use '--source-type jshell'
+
+*--catalog*=<catalog>::
+Path to catalog file to be used instead of the default
+
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
+
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
+
+*-j*, *--java*=<java>::
+JDK version to use for running the script.
+
+*-m*, *--main*=<main>::
+Main class to use when running. Used primarily for running jar's. Can be a glob pattern using ? and *.
+
+*--module*=<module>::
+Treat resource as a module. Optionally with the given module name
+
+*-C*, *--compile-option*=<compile-option>::
+Options to pass to the compiler
+
+*--manifest*=<key>=<value>::
+Add entry to the JAR manifest (e.g. --manifest=Main-Class=com.example.Main)
+
+*--[no-]integrations*::
+Enable or disable integration execution (default: true)
+
+*-D*=<key>=<value>::
+set a system property
++
+Default: `true`
+
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
+
+*--repos*=<repos>::
+Add additional repositories.
+
+*--cp*=<cp>::
+Add class path entries.
++
+Aliases: `--class-path`
+
+*--ignore-transitive-repositories*::
+Ignore remote repositories found in transitive dependencies
++
+Aliases: `--itr`
 
 *-n*, *--native*::
-  Build using native-image
+Build using native-image
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*-N*, *--native-option*=<native-option>::
+Options to pass to the native image tool
 
-*-O*, *--output*=_<outputFile>_::
-  The name or path to use for the exported file. If not specified a name will be determined from the original source reference and export flags.
+*--build-dir*=<build-dir>::
+Use given directory for build results
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--enable-preview*::
+Activate Java preview features
 
-*--repos*=_<repositories>_::
-  Add additional repositories.
+*-h*, *--help*::
+Display this help and exit
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-// end::picocli-generated-man-section-options[]
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-_scriptOrFile_::
-  A file or URL to a Java code file
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-// end::picocli-generated-man-section-arguments[]
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// end::picocli-generated-full-manpage[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
+
+== ARGUMENTS
+
+*<scriptOrFile>*::
+A file or URL to a Java code file
+

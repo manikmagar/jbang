@@ -1,50 +1,84 @@
 package dev.jbang.cli;
 
-import java.io.FileDescriptor;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
-import dev.jbang.source.*;
+import org.aesh.command.option.Mixin;
+import org.aesh.command.option.Option;
 
-import picocli.CommandLine;
+import dev.jbang.devkitman.Jdk;
+import dev.jbang.devkitman.JdkManager;
+import dev.jbang.source.Project;
+import dev.jbang.source.ProjectBuilder;
 
 public abstract class BaseBuildCommand extends BaseCommand {
 
-	@CommandLine.Mixin
+	@Mixin
 	ScriptMixin scriptMixin;
 
-	@CommandLine.Mixin
+	@Mixin
 	BuildMixin buildMixin;
 
-	@CommandLine.Mixin
+	@Mixin
 	DependencyInfoMixin dependencyInfoMixin;
 
-	@CommandLine.Option(names = {
-			"--build-dir" }, description = "Use given directory for build results")
-	Path buildDir;
+	@Mixin
+	NativeMixin nativeMixin;
 
-	@CommandLine.Option(names = {
-			"-n", "--native" }, description = "Build using native-image")
-	boolean nativeImage;
+	@Option(name = "build-dir", helpGroup = "Build options", description = "Use given directory for build results")
+	String buildDirStr;
 
-	PrintStream out = new PrintStream(new FileOutputStream(FileDescriptor.out));
+	@Option(name = "enable-preview", hasValue = false, helpGroup = "Build options", description = "Activate Java preview features")
+	Boolean enablePreviewRequested;
 
-	ProjectBuilder createProjectBuilder() {
-		return ProjectBuilder
-								.create()
-								.setProperties(dependencyInfoMixin.getProperties())
-								.additionalDependencies(dependencyInfoMixin.getDependencies())
-								.additionalRepositories(dependencyInfoMixin.getRepositories())
-								.additionalClasspaths(dependencyInfoMixin.getClasspaths())
-								.additionalSources(scriptMixin.sources)
-								.additionalResources(scriptMixin.resources)
-								.forceType(scriptMixin.forceType)
-								.catalog(scriptMixin.catalog)
-								.javaVersion(buildMixin.javaVersion)
-								.mainClass(buildMixin.main)
-								.compileOptions(buildMixin.compileOptions)
-								.nativeImage(nativeImage)
-								.buildDir(buildDir);
+	@Override
+	protected void validateArguments() {
+		requireScriptArgument(scriptMixin.scriptOrFile);
+	}
+
+	@Override
+	public void afterParse() {
+		super.afterParse();
+		dependencyInfoMixin.applyIgnoreTransitiveRepositories();
+	}
+
+	protected JdkManager getJdkManager() {
+		return buildMixin.jdkMixin.getJdkManager();
+	}
+
+	public Jdk getProjectJdk(Project project) {
+		Jdk jdk = project.projectJdk();
+		if (buildMixin.javaVersion != null) {
+			jdk = getJdkManager().getOrInstallJdk(buildMixin.javaVersion);
+		}
+		return jdk;
+	}
+
+	protected Path getBuildDir() {
+		return buildDirStr != null ? Paths.get(buildDirStr) : null;
+	}
+
+	protected ProjectBuilder createBaseProjectBuilder() {
+		return Project
+			.builder()
+			.setProperties(dependencyInfoMixin.getProperties())
+			.additionalDependencies(dependencyInfoMixin.getDependencies())
+			.additionalRepositories(dependencyInfoMixin.getRepositories())
+			.additionalClasspaths(dependencyInfoMixin.getClasspaths())
+			.additionalSources(scriptMixin.sources)
+			.additionalResources(scriptMixin.resources)
+			.forceType(scriptMixin.getForceType())
+			.catalog(scriptMixin.catalog)
+			.javaVersion(buildMixin.javaVersion)
+			.moduleName(buildMixin.module)
+			.compileOptions(buildMixin.compileOptions)
+			.manifestOptions(buildMixin.manifestOptions)
+			.nativeImage(nativeMixin.nativeImage)
+			.nativeOptions(nativeMixin.nativeOptions)
+			.integrations(buildMixin.getIntegrations())
+			.enablePreview(enablePreviewRequested)
+			.jdkManager(getJdkManager());
+
+		// NB: Do not put .mainClass(main) here
 	}
 }

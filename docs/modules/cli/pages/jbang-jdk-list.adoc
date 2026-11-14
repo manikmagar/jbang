@@ -1,62 +1,81 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-jdk-list(1)
+= JBANG JDK LIST
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang jdk list -- Lists installed JDKs.
 
-jbang-jdk-list - Lists installed JDKs.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang jdk list [OPTIONS]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Lists the JDKs jbang has installed. Use --available to see versions you can
+install.
 
-*jbang jdk list* *-o* *--fresh* *--quiet* *--verbose*
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang jdk list
+jbang jdk list --available
+jbang jdk list --format=json
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Lists installed JDKs.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*-a*, *--available*::
+Shows versions available for installation
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*-P*, *--providers*::
+Shows available providers
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*-D*, *--distros*::
+Shows distributions available for installation
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-d*, *--show-details*::
+Shows detailed information for each JDK (only when format=text)
++
+Aliases: `--details`
 
-// end::picocli-generated-man-section-options[]
+*--format*=<format>::
+Specify output format ('text' or 'json')
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-// end::picocli-generated-full-manpage[]
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
+
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
+
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
+
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
+
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
+
+*--no-netrc*::
+Disable .netrc authentication lookup.
+

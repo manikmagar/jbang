@@ -1,11 +1,12 @@
 package dev.jbang.spi;
 
-import static dev.jbang.cli.BaseCommand.EXIT_GENERIC_ERROR;
-import static dev.jbang.cli.BaseCommand.EXIT_INVALID_INPUT;
+import static dev.jbang.ExitException.EXIT_GENERIC_ERROR;
+import static dev.jbang.ExitException.EXIT_INVALID_INPUT;
 import static dev.jbang.util.JavaUtil.resolveInJavaHome;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -26,16 +27,19 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import javax.annotation.Nonnull;
+import org.jspecify.annotations.NonNull;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import dev.jbang.cli.ExitException;
+import dev.jbang.ExitException;
 import dev.jbang.dependencies.ArtifactInfo;
 import dev.jbang.dependencies.MavenRepo;
+import dev.jbang.devkitman.Jdk;
+import dev.jbang.source.BuildContext;
 import dev.jbang.source.Project;
 import dev.jbang.source.Source;
+import dev.jbang.source.buildsteps.CompileBuildStep;
 import dev.jbang.util.JavaUtil;
 import dev.jbang.util.PathTypeAdapter;
 import dev.jbang.util.Util;
@@ -50,8 +54,8 @@ public class IntegrationManager {
 	public static final String JAVA_ARGS = "java-args";
 
 	private static final GsonBuilder gsonb = new GsonBuilder()
-																.registerTypeHierarchyAdapter(Path.class,
-																		new PathTypeAdapter());
+		.registerTypeHierarchyAdapter(Path.class,
+				new PathTypeAdapter());
 
 	/**
 	 * Discovers all integration points and runs them.
@@ -59,8 +63,11 @@ public class IntegrationManager {
 	 * If an integration point created a native image it returns the resulting
 	 * image.
 	 */
-	public static IntegrationResult runIntegrations(Project prj, Path tmpJarDir, Path pomPath) {
+	public IntegrationResult runIntegrations(BuildContext ctx) {
 		IntegrationResult result = new IntegrationResult(null, null, null);
+		Project prj = ctx.getProject();
+		Path compileDir = ctx.getCompileDir();
+		Path pomPath = CompileBuildStep.getPomPath(ctx);
 		Source source = prj.getMainSource();
 
 		LinkedHashMap<String, String> repos = new LinkedHashMap<>();
@@ -68,31 +75,34 @@ public class IntegrationManager {
 		for (MavenRepo repo : prj.getRepositories()) {
 			repos.put(repo.getId(), repo.getUrl());
 		}
-		for (ArtifactInfo art : prj.resolveClassPath().getArtifacts()) {
+		for (ArtifactInfo art : ctx.resolveClassPath().getArtifacts()) {
 			if (art.getCoordinate() != null) { // skipping dependencies that does not have a GAV
 				deps.put(art.getCoordinate().toCanonicalForm(), art.getFile());
+			} else {
+				deps.put(art.getFile().getFileName().toString(), art.getFile());
 			}
 		}
 
-		List<String> comments = source.getTags().map(s -> "//" + s).collect(Collectors.toList());
-		ClassLoader old = Thread.currentThread().getContextClassLoader();
+		List<String> comments = source.getDirectives()
+			.getAll()
+			.map(d -> "//" + (d.getValue() != null ? d.getName() + " " + d.getValue() : d.getName()))
+			.collect(Collectors.toList());
 		PrintStream oldout = System.out;
-		try {
-			URLClassLoader integrationCl = getClassLoader(deps.values());
-			Thread.currentThread().setContextClassLoader(integrationCl);
+		try (URLClassLoader integrationCl = getClassLoader(deps.values())) {
 			String requestedJavaVersion = prj.getJavaVersion();
 			Set<String> classNames = loadIntegrationClassNames(integrationCl);
 			for (String className : classNames) {
 				Path srcPath = (source.getResourceRef().getFile() != null)
 						? source.getResourceRef().getFile().toAbsolutePath()
 						: null;
-				IntegrationInput input = new IntegrationInput(className, srcPath, tmpJarDir, pomPath, repos, deps,
-						comments,
-						prj.isNativeImage());
-				IntegrationResult ir = requestedJavaVersion == null
-						|| JavaUtil.satisfiesRequestedVersion(requestedJavaVersion, JavaUtil.determineJavaVersion())
-								? runIntegrationEmbedded(input, integrationCl)
-								: runIntegrationExternal(input, prj.getProperties(), requestedJavaVersion);
+				IntegrationInput input = new IntegrationInput(className, srcPath, compileDir, pomPath, repos, deps,
+						comments, prj.isNativeImage(), Util.isVerbose());
+				boolean embedded = (requestedJavaVersion == null || JavaUtil.satisfiesRequestedVersion(
+						requestedJavaVersion, JavaUtil.getCurrentMajorJavaVersion()) && !JavaUtil.inNativeImage())
+						&& !"true".equals(System.getProperty("jbang.build.integration.forceExternal"));
+				IntegrationResult ir = embedded
+						? runIntegrationEmbedded(input, integrationCl)
+						: runIntegrationExternal(input, prj.getProperties(), prj.projectJdk());
 				result = result.merged(ir);
 			}
 		} catch (ClassNotFoundException e) {
@@ -105,13 +115,12 @@ public class IntegrationManager {
 		} catch (Exception e) {
 			throw new ExitException(EXIT_GENERIC_ERROR, "Issue running postBuild()", e);
 		} finally {
-			Thread.currentThread().setContextClassLoader(old);
 			System.setOut(oldout);
 		}
 		return result;
 	}
 
-	@Nonnull
+	@NonNull
 	private static URLClassLoader getClassLoader(Collection<Path> deps) {
 		URL[] urls = deps.stream().map(path -> {
 			try {
@@ -149,7 +158,18 @@ public class IntegrationManager {
 		return classNames;
 	}
 
-	private static IntegrationResult runIntegrationEmbedded(IntegrationInput input, URLClassLoader integrationCl)
+	protected IntegrationResult runIntegrationEmbedded(IntegrationInput input, URLClassLoader integrationCl)
+			throws Exception {
+		ClassLoader old = Thread.currentThread().getContextClassLoader();
+		try {
+			Thread.currentThread().setContextClassLoader(integrationCl);
+			return runIntegrationEmbedded_(input, integrationCl);
+		} finally {
+			Thread.currentThread().setContextClassLoader(old);
+		}
+	}
+
+	protected IntegrationResult runIntegrationEmbedded_(IntegrationInput input, URLClassLoader integrationCl)
 			throws Exception {
 		Util.infoMsg("Post build with " + input.integrationClassName);
 
@@ -209,20 +229,39 @@ public class IntegrationManager {
 		return new IntegrationResult(nativeImage, mainClass, javaArgs);
 	}
 
-	private static IntegrationResult runIntegrationExternal(IntegrationInput input,
+	protected IntegrationResult runIntegrationExternal(IntegrationInput input,
 			Map<String, String> properties,
-			String requestedJavaVersion)
+			Jdk jdk)
 			throws Exception {
 		Gson parser = gsonb.create();
 		Util.infoMsg("Running external post build for " + input.integrationClassName);
 
 		List<String> args = new ArrayList<>();
-		args.add(resolveInJavaHome("java", requestedJavaVersion)); // TODO
+		args.add(resolveInJavaHome("java", jdk)); // TODO
 		for (Map.Entry<String, String> entry : properties.entrySet()) {
 			args.add("-D" + entry.getKey() + "=" + entry.getValue());
 		}
+
+		Path jbangJar = Util.getJarLocation();
 		args.add("-cp");
-		args.add(Util.getJarLocation().toString());
+
+		if (JavaUtil.inNativeImage()
+				&& !jbangJar.toString().endsWith(".jar")) {
+			// When running as native image, find the jar in the same directory
+			Path jarPath = jbangJar.getParent().resolve("jbang.jar");
+			args.add(jarPath.toString());
+		} else {
+			if (jbangJar.toString().endsWith(".jar")) {
+				args.add(jbangJar.toString());
+			} else {
+				// We will assume that we're running inside an IDE or
+				// some kind of test environment and need to manually
+				// add the Gson dependency
+				Path gsonJar = Util.getJarLocation(Gson.class);
+				args.add(jbangJar + File.pathSeparator + gsonJar);
+			}
+		}
+
 		args.add("dev.jbang.spi.IntegrationManager");
 
 		if (Util.isVerbose()) {
@@ -231,8 +270,8 @@ public class IntegrationManager {
 		}
 
 		Process process = new ProcessBuilder(args)
-													.redirectError(ProcessBuilder.Redirect.INHERIT)
-													.start();
+			.redirectError(ProcessBuilder.Redirect.INHERIT)
+			.start();
 
 		try (Writer w = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()))) {
 			parser.toJson(input, w);
@@ -267,12 +306,13 @@ public class IntegrationManager {
 		IntegrationInput input = parser.fromJson(new InputStreamReader(System.in), IntegrationInput.class);
 		ClassLoader old = Thread.currentThread().getContextClassLoader();
 		PrintStream oldout = System.out;
+		Util.setVerbose(input.verbose);
 		String output = "";
 		boolean ok = false;
 		try {
 			URLClassLoader integrationCl = getClassLoader(input.dependencies.values());
 			Thread.currentThread().setContextClassLoader(integrationCl);
-			IntegrationResult result = runIntegrationEmbedded(input, integrationCl);
+			IntegrationResult result = new IntegrationManager().runIntegrationEmbedded(input, integrationCl);
 			output = parser.toJson(result);
 			ok = true;
 		} catch (ClassNotFoundException e) {
@@ -281,6 +321,9 @@ public class IntegrationManager {
 			output = "Integration class missing method with signature public static Map<String, byte[]> postBuild(Path classesDir, Path pomFile, List<Map.Entry<String, Path>> dependencies)";
 		} catch (Exception e) {
 			output = "Issue running postBuild()";
+			if (input.verbose) {
+				e.printStackTrace(System.err);
+			}
 		} finally {
 			Thread.currentThread().setContextClassLoader(old);
 			System.setOut(oldout);

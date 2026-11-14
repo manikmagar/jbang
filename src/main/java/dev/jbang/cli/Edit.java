@@ -1,30 +1,33 @@
 package dev.jbang.cli;
 
 import static dev.jbang.Settings.CP_SEPARATOR;
+import static dev.jbang.util.Util.freshly;
+import static dev.jbang.util.Util.pathToString;
 import static dev.jbang.util.Util.verboseMsg;
 import static java.lang.System.out;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardWatchEventKinds;
-import java.nio.file.WatchEvent;
-import java.nio.file.WatchKey;
-import java.nio.file.WatchService;
+import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.aesh.command.CommandDefinition;
+import org.aesh.command.option.Arguments;
+import org.aesh.command.option.Mixin;
+import org.aesh.command.option.Option;
+
 import dev.jbang.Cache;
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.dependencies.DependencyUtil;
 import dev.jbang.dependencies.JitPackUtil;
 import dev.jbang.dependencies.MavenRepo;
 import dev.jbang.net.EditorManager;
+import dev.jbang.resources.ResourceRef;
 import dev.jbang.source.*;
 import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.TemplateEngine;
@@ -32,73 +35,197 @@ import dev.jbang.util.Util;
 import dev.jbang.util.Util.Shell;
 
 import io.quarkus.qute.Template;
-import picocli.CommandLine;
 
-@CommandLine.Command(name = "edit", description = "Setup a temporary project to edit script in an IDE.")
+@CommandDefinition(name = "edit", description = "Edit a script in an IDE.", helpGroup = "Editing")
 public class Edit extends BaseCommand {
 
-	static String[] knownEditors = { "codium", "code", "eclipse", "idea", "netbeans" };
+	static String[] knownEditors = { "codium", "code", "cursor", "eclipse", "idea", "netbeans" };
 
-	@CommandLine.Mixin
+	@Mixin
 	ScriptMixin scriptMixin;
 
-	@CommandLine.Mixin
+	@Mixin
 	DependencyInfoMixin dependencyInfoMixin;
 
-	@CommandLine.Option(names = {
-			"--live" }, description = "Setup temporary project, regenerate project on dependency changes.")
+	@Arguments(index = "1..*", arity = "0..*", description = "Additional files")
+	List<String> additionalFiles;
+
+	@Override
+	public void afterParse() {
+		super.afterParse();
+		dependencyInfoMixin.applyIgnoreTransitiveRepositories();
+	}
+
+	@Option(name = "live", hasValue = false, description = "Open directory in IDE's that support JBang or generate temporary project with option to regenerate project on dependency changes.")
 	public boolean live;
 
-	@CommandLine.Option(names = {
-			"--open" }, arity = "0..1", defaultValue = "${JBANG_EDITOR:-${jbang.edit.open:-}}", fallbackValue = "${JBANG_EDITOR:-${jbang.edit.open:-}}", description = "Opens editor/IDE on the temporary project.", preprocessor = StrictParameterPreprocessor.class)
-	public Optional<String> editor;
+	@Option(name = "open", defaultValue = "${env:JBANG_EDITOR:-}", fallbackValue = "${env:JBANG_EDITOR:-}", description = "Opens editor/IDE on the temporary project.")
+	public String editor;
 
-	@CommandLine.Option(names = { "--no-open" })
+	@Option(name = "no-open", hasValue = false, description = "Explicitly prevent JBang from opening an editor/IDE")
 	public boolean noOpen;
+
+	@Option(shortName = 'b', name = "sandbox", hasValue = false, description = "Edit in sandbox mode. Useful when the editor/IDE used has no JBang support")
+	boolean sandbox;
+
+	/**
+	 * Returns a parent path if one of the targetFileNames exist in such parent.
+	 *
+	 * @param filePath
+	 * @param targetFileNames list of markers to search for
+	 * @return if found returns the marker path, if none found return null.
+	 */
+	static Path findNearestRoot(Path filePath, List<String> targetFileNames) {
+		Path file = filePath.toAbsolutePath().normalize();
+		Path parent = file.getParent();
+
+		// stop/skip local root dir (user.home)
+		while (parent != null && !Settings.getLocalRootDir().equals(parent)) {
+			for (String targetFileName : targetFileNames) {
+				Path targetFile = parent.resolve(targetFileName);
+				if (Files.exists(targetFile)) {
+					return targetFile;
+				}
+			}
+			parent = parent.getParent();
+		}
+		return null;
+	}
+
+	static List<String> buildRootMarkers = Arrays.asList("jbang.build", "pom.xml", "build.gradle", ".jbang",
+			".project");
+	static List<String> editorRootMarkers = Arrays.asList(".vscode", ".idea", ".eclipse");
+
+	static Path safeParent(Path p) {
+		if (!p.isAbsolute()) {
+			p = p.toAbsolutePath();
+		}
+		return p.getParent();
+	}
+
+	static public Path locateProjectDir(Path location) {
+		if (!Files.isDirectory(location)) {
+			// peek into file and find package statement - then start searching from that
+			// root instead.
+			try {
+				String pkg = Util.getSourcePackage(Util.readString(location)).orElse("");
+				if (!"".equals(pkg)) { // if package found try resolve matching parent dirs
+					String parentPath = pkg.replace(".", "/");
+					if (safeParent(location).endsWith(parentPath)) {
+						String relativeParent = String.join("/", Collections.nCopies(pkg.indexOf(".") + 1, ".."));
+						location = safeParent(location).resolve(relativeParent);
+					} else {
+						location = safeParent(location);
+					}
+				} else {
+					location = safeParent(location);
+				}
+			} catch (IOException e) {
+				Util.verboseMsg("Could not read package from " + location, e);
+				// ignore
+			}
+		}
+		// once we have a initial root dir to search from based on package or dir.
+		// Look for first level project markers by finding editor metadata
+		Path nearestRoot = findNearestRoot(location, editorRootMarkers);
+		if (nearestRoot == null) {
+			// if no edit location found try build projects
+			nearestRoot = findNearestRoot(location, buildRootMarkers);
+		}
+		if (nearestRoot != null) {
+			Util.verboseMsg("Found project root for edit: " + nearestRoot);
+			location = safeParent(nearestRoot);
+		}
+		return location.normalize();
+	}
+
+	@Override
+	protected void validateArguments() {
+		// Normal edit without a script opens the current directory in the editor
+		// (same as `jbang edit .`). Sandbox mode needs an actual script to build
+		// the temporary IDE project around, so require one there.
+		if (scriptMixin.scriptOrFile == null && sandbox) {
+			requireScriptArgument(null);
+		}
+	}
 
 	@Override
 	public Integer doCall() throws IOException {
-		scriptMixin.validate();
+		// force download sources when editing
+		Util.setDownloadSources(true);
 
-		ProjectBuilder pb = createProjectBuilder();
-		final Project prj = pb.build(scriptMixin.scriptOrFile);
-
-		if (prj.isJar() || prj.getMainSourceSet().getSources().isEmpty()) {
-			throw new ExitException(EXIT_INVALID_INPUT, "You can only edit source files");
+		if (additionalFiles == null) {
+			additionalFiles = new ArrayList<>();
 		}
 
-		Path project = createProjectForLinkedEdit(prj, pb, false);
-		String projectPathString = Util.pathToString(project.toAbsolutePath());
-		// err.println(project.getAbsolutePath());
+		if (!sandbox) {
+			File location;
+			if (scriptMixin.scriptOrFile != null) {
+				location = new File(scriptMixin.scriptOrFile);
+			} else {
+				location = null;
+			}
+			info("Assuming your editor have JBang support installed. See https://jbang.dev/ide");
+			info("If you prefer to open in a sandbox run with `jbang edit -b` instead.");
+			Path path = null;
+			if (location == null) {
+				path = locateProjectDir(Util.getCwd().toAbsolutePath());
+			} else {
+				path = locateProjectDir(location.toPath());
+			}
+			if (path != null && ((location != null) && !path.equals(location.toPath()))) {
+				additionalFiles.add(0, pathToString(location.toPath()));
+			}
 
-		if (!noOpen) {
-			openEditor(project, projectPathString);
-		}
-
-		if (!live) {
-			out.println(projectPathString); // quit(project.getAbsolutePath());
+			if (!noOpen) {
+				openEditor(pathToString(path), additionalFiles);
+			}
+			System.out.println(path);
 		} else {
-			watchForChanges(prj, () -> {
-				// TODO only regenerate when dependencies changes.
-				info("Regenerating project.");
-				try {
-					createProjectForLinkedEdit(prj, ProjectBuilder.create(), true);
-				} catch (IOException e) {
-					throw new RuntimeException(e);
+			scriptMixin.validate(false);
+			File location = new File(scriptMixin.scriptOrFile);
+			info("Creating sandbox for script editing " + location);
+			ProjectBuilder pb = createProjectBuilder();
+			final Project prj = pb.build(scriptMixin.scriptOrFile);
+
+			if (prj.isExecutableArchive() || prj.getMainSourceSet().getSources().isEmpty()) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "You can only edit source files");
+			}
+
+			Path project = createProjectForLinkedEdit(prj, Collections.emptyList(), false);
+			String projectPathString = pathToString(project.toAbsolutePath());
+
+			if (!noOpen) {
+				openEditor(projectPathString, additionalFiles);
+			}
+
+			if (!live) {
+				out.println(projectPathString);
+			} else {
+				Path orginalFile = prj.getResourceRef().getFile();
+				if (!Files.exists(orginalFile)) {
+					throw new ExitException(ExitException.EXIT_UNEXPECTED_STATE,
+							"Cannot live edit " + prj.getResourceRef().getOriginalResource());
 				}
-				return null;
-			});
+				watchForChanges(orginalFile, () -> {
+					// TODO only regenerate when dependencies or file/resource refs changes.
+					info("Regenerating project.");
+					try {
+						ProjectBuilder pblive = createProjectBuilder();
+						Project prjlive = pblive.build(scriptMixin.scriptOrFile);
+						createProjectForLinkedEdit(prjlive, Collections.emptyList(), true);
+					} catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+					return null;
+				});
+			}
 		}
-		return EXIT_OK;
+		return ExitException.EXIT_OK;
 	}
 
-	private void watchForChanges(Project prj, Callable<Object> action) throws IOException {
+	private void watchForChanges(Path orginalFile, Callable<Object> action) throws IOException {
 		try (final WatchService watchService = FileSystems.getDefault().newWatchService()) {
-			Path orginalFile = prj.getResourceRef().getFile();
-			if (!Files.exists(orginalFile)) {
-				throw new ExitException(EXIT_UNEXPECTED_STATE,
-						"Cannot live edit " + prj.getResourceRef().getOriginalResource());
-			}
 			Path watched = orginalFile.toAbsolutePath().getParent();
 			watched.register(watchService,
 					StandardWatchEventKinds.ENTRY_MODIFY);
@@ -112,14 +239,13 @@ public class Edit extends BaseCommand {
 					verboseMsg("Changed file: " + changed.toString());
 					if (Files.isSameFile(orginalFile, changed)) {
 						try {
-							action.call();
+							freshly(action);
 						} catch (RuntimeException ee) {
 							warn("Error when re-generating project. Ignoring it, but state might be undefined: "
 									+ ee.getMessage());
-						} catch (IOException ioe) {
-							throw ioe;
 						} catch (Exception e) {
-							throw new ExitException(EXIT_GENERIC_ERROR, "Exception when re-generating project. Exiting",
+							throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+									"Exception when re-generating project. Exiting",
 									e);
 						}
 					}
@@ -137,29 +263,31 @@ public class Edit extends BaseCommand {
 
 	// try open editor if possible and install if needed, returns true if editor
 	// started, false if not possible (i.e. editor not available)
-	private boolean openEditor(Path project, String projectPathString) throws IOException {
-		if (!editor.isPresent() || editor.get().isEmpty()) {
-			editor = askEditor();
-			if (!editor.isPresent()) {
+	private boolean openEditor(String projectPathString, List<String> additionalFiles) throws IOException {
+		if (editor == null || editor.isEmpty()) {
+			Optional<String> ed = askEditor();
+			if (!ed.isPresent()) {
 				return false;
 			}
+			editor = ed.get();
 		} else {
-			showStartingMsg(editor.get(), !editor.get().equals(spec.findOption("open").defaultValue()));
+			showStartingMsg(editor, true);
 		}
-		if ("gitpod".equals(editor.get()) && System.getenv("GITPOD_WORKSPACE_URL") != null) {
+		if ("gitpod".equals(editor) && System.getenv("GITPOD_WORKSPACE_URL") != null) {
 			info("Open this url to edit the project in your gitpod session:\n\n"
-					+ System.getenv("GITPOD_WORKSPACE_URL") + "#" + project.toAbsolutePath() + "\n\n");
+					+ System.getenv("GITPOD_WORKSPACE_URL") + "#" + projectPathString + "\n\n");
 		} else {
 			List<String> optionList = new ArrayList<>();
-			optionList.add(editor.get());
+			optionList.add(editor);
 			optionList.add(projectPathString);
+			optionList.addAll(additionalFiles);
 
 			String[] cmd;
 			if (Util.getShell() == Shell.bash) {
-				final String editorCommand = CommandBuffer.of(optionList).asCommandLine(Shell.bash);
+				final String editorCommand = CommandBuffer.of(optionList).shell(Shell.bash).asCommandLine();
 				cmd = new String[] { "sh", "-c", editorCommand };
 			} else {
-				final String editorCommand = CommandBuffer.of(optionList).asCommandLine(Shell.cmd);
+				final String editorCommand = CommandBuffer.of(optionList).shell(Shell.cmd).asCommandLine();
 				cmd = new String[] { "cmd", "/c", editorCommand };
 			}
 			verboseMsg("Running `" + String.join(" ", cmd) + "`");
@@ -169,15 +297,15 @@ public class Edit extends BaseCommand {
 	}
 
 	ProjectBuilder createProjectBuilder() {
-		return ProjectBuilder
-								.create()
-								.setProperties(dependencyInfoMixin.getProperties())
-								.additionalDependencies(dependencyInfoMixin.getDependencies())
-								.additionalRepositories(dependencyInfoMixin.getRepositories())
-								.additionalClasspaths(dependencyInfoMixin.getClasspaths())
-								.additionalSources(scriptMixin.sources)
-								.additionalResources(scriptMixin.resources)
-								.forceType(scriptMixin.forceType);
+		return Project
+			.builder()
+			.setProperties(dependencyInfoMixin.getProperties())
+			.additionalDependencies(dependencyInfoMixin.getDependencies())
+			.additionalRepositories(dependencyInfoMixin.getRepositories())
+			.additionalClasspaths(dependencyInfoMixin.getClasspaths())
+			.additionalSources(scriptMixin.sources)
+			.additionalResources(scriptMixin.resources)
+			.forceType(scriptMixin.getForceType());
 	}
 
 	private static Optional<String> askEditor() throws IOException {
@@ -200,7 +328,7 @@ public class Edit extends BaseCommand {
 				options.add("Use '" + ed + "'");
 			}
 
-			int result = Util.askInput(question, 30, 0, options.toArray(new String[] {}));
+			int result = Util.askInput(question, Util.getAskInputTimeout(), 0, options.toArray(new String[] {}));
 			if (result == 0) {
 				return Optional.empty();
 			} else if (result == 1) {
@@ -210,7 +338,7 @@ public class Edit extends BaseCommand {
 				showStartingMsg(ed, true);
 				return Optional.of(ed);
 			} else {
-				throw new ExitException(EXIT_GENERIC_ERROR,
+				throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
 						"No default editor configured and no other option accepted.\n Please try again making a correct choice or use an explicit editor, i.e. `jbang edit --open=eclipse xyz.java`");
 			}
 		}
@@ -264,7 +392,7 @@ public class Edit extends BaseCommand {
 		try {
 			int exit = process.waitFor();
 			if (exit > 0) {
-				throw new ExitException(EXIT_INTERNAL_ERROR,
+				throw new ExitException(ExitException.EXIT_INTERNAL_ERROR,
 						"Could not install and setup extensions into VSCodium. Aborting.");
 			}
 		} catch (InterruptedException e) {
@@ -279,17 +407,17 @@ public class Edit extends BaseCommand {
 	private static void showStartingMsg(String ed, boolean showConfig) {
 		String msg = "Starting '" + ed + "'.";
 		if (showConfig) {
-			msg += "If you want to make this the default, run 'jbang config set edit.open " + ed + "'";
+			msg += " If you want to make this the default, run 'jbang config set edit.open " + ed + "'";
 		}
 		Util.infoMsg(msg);
 	}
 
 	/** Create Project to use for editing **/
-	Path createProjectForLinkedEdit(Project prj, ProjectBuilder pb, boolean reload) throws IOException {
+	Path createProjectForLinkedEdit(Project prj, List<String> arguments, boolean reload) throws IOException {
 		Path originalFile = prj.getResourceRef().getFile();
 
 		List<String> dependencies = prj.getMainSourceSet().getDependencies();
-		String cp = prj.resolveClassPath().getClassPath();
+		String cp = BuildContext.forProject(prj).resolveClassPath().getClassPath();
 		List<String> resolvedDependencies = Arrays.asList(cp.split(CP_SEPARATOR));
 
 		Path baseDir = Settings.getCacheDir(Cache.CacheClass.projects);
@@ -306,37 +434,36 @@ public class Edit extends BaseCommand {
 		Path srcDir = tmpProjectDir.resolve("src");
 		Util.mkdirs(srcDir);
 
-		Path srcFile = srcDir.resolve(name);
-		Util.createLink(srcFile, originalFile);
+		Path link = srcDir.resolve(name);
+		Util.createLink(link, originalFile);
 
 		for (ResourceRef sourceRef : prj.getMainSourceSet().getSources()) {
-			Path sfile;
+			Path linkFile;
 			Source src = Source.forResourceRef(sourceRef, Function.identity());
 			if (src.getJavaPackage().isPresent()) {
 				Path packageDir = srcDir.resolve(src.getJavaPackage().get().replace(".", File.separator));
 				Util.mkdirs(packageDir);
-				sfile = packageDir.resolve(sourceRef.getFile().getFileName());
+				linkFile = packageDir.resolve(sourceRef.getFile().getFileName());
 			} else {
-				sfile = srcDir.resolve(sourceRef.getFile().getFileName());
+				linkFile = srcDir.resolve(sourceRef.getFile().getFileName());
 			}
 			Path destFile = sourceRef.getFile().toAbsolutePath();
-			Util.createLink(sfile, destFile);
+			Util.createLink(linkFile, destFile);
 		}
 
 		for (RefTarget ref : prj.getMainSourceSet().getResources()) {
-			Path target = ref.to(srcDir);
-			;
-			Util.mkdirs(target.getParent());
-			Util.createLink(target, ref.getSource().getFile().toAbsolutePath());
+			Path linkFile = ref.to(srcDir);
+			Util.mkdirs(linkFile.getParent());
+			Util.createLink(linkFile, ref.getSource().getFile().toAbsolutePath());
 		}
 
 		// create build gradle
 		Optional<String> packageName = Util.getSourcePackage(
-				new String(Files.readAllBytes(srcFile), Charset.defaultCharset()));
+				new String(Files.readAllBytes(link), Charset.defaultCharset()));
 		String baseName = Util.getBaseName(name);
 		String fullClassName;
 		fullClassName = packageName.map(s -> s + "." + baseName).orElse(baseName);
-		String templateName = "build.qute.gradle";
+		ResourceRef templateRef = ResourceRef.forResource("classpath:/build.qute.gradle");
 		Path destination = tmpProjectDir.resolve("build.gradle");
 		TemplateEngine engine = TemplateEngine.instance();
 
@@ -344,14 +471,14 @@ public class Edit extends BaseCommand {
 		// resolveDependencies
 		List<MavenRepo> repositories = prj.getRepositories();
 		if (repositories.isEmpty()) {
-			prj.addRepository(DependencyUtil.toMavenRepo("mavencentral"));
+			prj.addRepository(DependencyUtil.toMavenRepo("central"));
 		}
 
 		// Turn any URL dependencies into regular GAV coordinates
 		List<String> depIds = dependencies
-											.stream()
-											.map(JitPackUtil::ensureGAV)
-											.collect(Collectors.toList());
+			.stream()
+			.map(JitPackUtil::ensureGAV)
+			.collect(Collectors.toList());
 		// And if we encountered URLs let's make sure the JitPack repo is available
 		if (!depIds.equals(dependencies)
 				&& repositories.stream().noneMatch(r -> DependencyUtil.REPO_JITPACK.equals(r.getUrl()))) {
@@ -359,86 +486,71 @@ public class Edit extends BaseCommand {
 		}
 
 		renderTemplate(engine, depIds, fullClassName, baseName, resolvedDependencies, repositories,
-				templateName,
-				pb.getArguments(),
+				templateRef,
+				arguments,
 				destination);
 
 		// setup eclipse
-		templateName = ".qute.classpath";
+		templateRef = ResourceRef.forResource("classpath:/.qute.classpath");
 		destination = tmpProjectDir.resolve(".classpath");
 		renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-				templateName,
-				pb.getArguments(),
+				templateRef,
+				arguments,
 				destination);
 
-		templateName = ".qute.project";
+		templateRef = ResourceRef.forResource("classpath:/.qute.project");
 		destination = tmpProjectDir.resolve(".project");
 		renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-				templateName,
-				pb.getArguments(),
+				templateRef,
+				arguments,
 				destination);
 
-		templateName = "main.qute.launch";
+		templateRef = ResourceRef.forResource("classpath:/main.qute.launch");
 		destination = tmpProjectDir.resolve(".eclipse/" + baseName + ".launch");
 		destination.toFile().getParentFile().mkdirs();
 		renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-				templateName,
-				pb.getArguments(),
+				templateRef,
+				arguments,
 				destination);
 
-		templateName = "main-port-4004.qute.launch";
+		templateRef = ResourceRef.forResource("classpath:/main-port-4004.qute.launch");
 		destination = tmpProjectDir.resolve(".eclipse/" + baseName + "-port-4004.launch");
 		renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-				templateName,
-				pb.getArguments(),
+				templateRef,
+				arguments,
 				destination);
 
 		// setup vscode
-		templateName = "launch.qute.json";
+		templateRef = ResourceRef.forResource("classpath:/launch.qute.json");
 		destination = tmpProjectDir.resolve(".vscode/launch.json");
 		if (isNeeded(reload, destination)) {
 			destination.toFile().getParentFile().mkdirs();
 			renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-					templateName,
-					pb.getArguments(),
+					templateRef,
+					arguments,
 					destination);
 		}
 
 		// setup vscode
-		templateName = "README.qute.md";
+		templateRef = ResourceRef.forResource("classpath:/README.qute.md");
 		destination = tmpProjectDir.resolve("README.md");
 		if (isNeeded(reload, destination)) {
 			destination.toFile().getParentFile().mkdirs();
 			renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-					templateName,
-					pb.getArguments(),
+					templateRef,
+					arguments,
 					destination);
 		}
 
-		templateName = "settings.qute.json";
+		templateRef = ResourceRef.forResource("classpath:/settings.qute.json");
 		destination = tmpProjectDir.resolve(".vscode/settings.json");
 		if (isNeeded(reload, destination)) {
 			destination.toFile().getParentFile().mkdirs();
 			renderTemplate(engine, dependencies, fullClassName, baseName, resolvedDependencies, repositories,
-					templateName,
-					pb.getArguments(),
+					templateRef,
+					arguments,
 					destination);
 		}
-
-		// setup intellij - disabled for now as idea was not picking these up directly
-		/*
-		 * templateName = "idea-port-4004.qute.xml"; destination = new
-		 * File(tmpProjectDir, ".idea/runConfigurations/" + baseName +
-		 * "-port-4004.xml").toPath(); destination.toFile().getParentFile().mkdirs();
-		 * renderTemplate(engine, collectDependencies, baseName, resolvedDependencies,
-		 * templateName, script.getArguments(), destination);
-		 *
-		 * templateName = "idea.qute.xml"; destination = new File(tmpProjectDir,
-		 * ".idea/runConfigurations/" + baseName + ".xml").toPath();
-		 * destination.toFile().getParentFile().mkdirs(); renderTemplate(engine,
-		 * collectDependencies, baseName, resolvedDependencies, templateName,
-		 * script.getArguments(), destination);
-		 */
 
 		return tmpProjectDir;
 	}
@@ -448,29 +560,29 @@ public class Edit extends BaseCommand {
 	}
 
 	private void renderTemplate(TemplateEngine engine, List<String> collectDependencies, String fullclassName,
-			String baseName,
-			List<String> resolvedDependencies, List<MavenRepo> repositories, String templateName,
+			String baseName, List<String> resolvedDependencies, List<MavenRepo> repositories, ResourceRef templateRef,
 			List<String> userParams, Path destination)
 			throws IOException {
-		Template template = engine.getTemplate(templateName);
+		Template template = engine.getTemplate(templateRef);
 		if (template == null)
-			throw new ExitException(EXIT_INVALID_INPUT, "Could not locate template named: '" + templateName + "'");
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"Could not locate template named: '" + templateRef + "'");
 		String result = template
-								.data("repositories",
-										repositories.stream()
-													.map(MavenRepo::getUrl)
-													.filter(s -> !"".equals(s)))
-								.data("dependencies", collectDependencies)
-								.data("gradledependencies", gradleify(collectDependencies))
-								.data("baseName", baseName)
-								.data("fullClassName", fullclassName)
-								.data("classpath",
-										resolvedDependencies.stream()
-															.filter(t -> !t.isEmpty())
-															.collect(Collectors.toList()))
-								.data("userParams", String.join(" ", userParams))
-								.data("cwd", System.getProperty("user.dir"))
-								.render();
+			.data("repositories",
+					repositories.stream()
+						.map(MavenRepo::getUrl)
+						.filter(s -> !"".equals(s)))
+			.data("dependencies", collectDependencies)
+			.data("gradledependencies", gradleify(collectDependencies))
+			.data("baseName", baseName)
+			.data("fullClassName", fullclassName)
+			.data("classpath",
+					resolvedDependencies.stream()
+						.filter(t -> !t.isEmpty())
+						.collect(Collectors.toList()))
+			.data("userParams", String.join(" ", userParams))
+			.data("cwd", System.getProperty("user.dir"))
+			.render();
 
 		Util.writeString(destination, result);
 	}
@@ -493,4 +605,25 @@ public class Edit extends BaseCommand {
 		}
 	}
 
+	@Override
+	public String prose() {
+		return "Opens your script for editing in an IDE. By default it opens the script's\n"
+				+ "existing location and assumes the editor has JBang support (see\n"
+				+ "https://jbang.dev/ide). With --sandbox (-b) it instead creates a temporary\n"
+				+ "IDE project linking your script and its dependencies, so you get code\n"
+				+ "completion without a build file - handy for editors without JBang support.\n"
+				+ "Choose the editor with --open (or $JBANG_EDITOR); --no-open only prints the\n"
+				+ "path, and --live (sandbox only) regenerates the project when dependencies\n"
+				+ "change.";
+	}
+
+	@Override
+	public List<String> examples() {
+		return Arrays.asList(
+				"${COMMAND-FULL-NAME} hello.java",
+				"${COMMAND-FULL-NAME} --open=code hello.java",
+				"${COMMAND-FULL-NAME} --no-open hello.java",
+				"${COMMAND-FULL-NAME} --sandbox hello.java",
+				"${COMMAND-FULL-NAME} --sandbox --live --open=idea hello.java");
+	}
 }

@@ -1,67 +1,62 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-cache(1)
+= JBANG CACHE
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang cache -- Manage compiled scripts in the local cache.
 
-jbang-cache - Manage compiled scripts in the local cache.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang cache [OPTIONS] [COMMAND]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+jbang caches downloaded scripts, built jars, dependencies and JDKs to make later
+runs fast. Use these commands to clear them when something looks stale.
 
-*jbang cache* *-o* *--fresh* *--quiet* *--verbose* [COMMAND]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang cache clear
+jbang cache clear --deps
+jbang cache clear --all
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Manage compiled scripts in the local cache.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-commands[]
-== Commands
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-xref:jbang-cache-clear.adoc[*clear*]::
-  Clear the various caches used by jbang. By default this will clear the JAR, script, stdin and URL caches. To clear other caches list them explicitly i.e. '--project' for temporary projects.
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// end::picocli-generated-man-section-commands[]
+== COMMANDS
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+* xref:jbang:cli:jbang-cache-clear.adoc[*clear*] - Clear the various caches used by jbang. By default this will clear the JAR, script, stdin, URL and dependency caches.
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

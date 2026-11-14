@@ -7,13 +7,13 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
-import dev.jbang.cli.BaseCommand;
-import dev.jbang.cli.ExitException;
 
 public class VersionChecker {
 	private static final String jbangVersionUrl = "https://www.jbang.dev/releases/latest/download/version.txt";
@@ -32,7 +32,7 @@ public class VersionChecker {
 		try {
 			inform(retrieveLatestVersionAsync().get(), false);
 		} catch (ExecutionException e) {
-			throw new ExitException(BaseCommand.EXIT_GENERIC_ERROR, "Couldn't retrieve latest jbang version");
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Couldn't retrieve latest jbang version");
 		} catch (InterruptedException e) {
 			// Ignore
 		}
@@ -65,7 +65,7 @@ public class VersionChecker {
 				}
 			}
 		} catch (ExecutionException e) {
-			throw new ExitException(BaseCommand.EXIT_GENERIC_ERROR, "Couldn't retrieve latest jbang version");
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Couldn't retrieve latest jbang version");
 		} catch (InterruptedException e) {
 			// Ignore
 		}
@@ -103,6 +103,8 @@ public class VersionChecker {
 		} catch (ExecutionException e) {
 			Util.verboseMsg("Couldn't retrieve latest jbang version", e);
 		} catch (InterruptedException e) {
+			// Ignore
+		} catch (CancellationException e) {
 			// Ignore
 		}
 	}
@@ -170,14 +172,18 @@ public class VersionChecker {
 
 	private static Future<String> retrieveLatestVersionAsync() {
 		if (versionCheckResult == null) {
-			versionCheckResult = Executors.newSingleThreadExecutor().submit(VersionChecker::retrieveLatestVersion);
+			versionCheckResult = Executors.newSingleThreadExecutor(r -> {
+				Thread t = new Thread(r, "jbang-version-check");
+				t.setDaemon(true);
+				return t;
+			}).submit(VersionChecker::retrieveLatestVersion);
 		}
 		return versionCheckResult;
 	}
 
 	// Determines and returns the latest JBang version from GitHub
 	private static String retrieveLatestVersion() throws IOException {
-		Path versionFile = Util.downloadFile(jbangVersionUrl, Settings.getCacheDir().toFile(), CONNECT_TIMEOUT);
+		Path versionFile = NetUtil.downloadFile(jbangVersionUrl, Settings.getCacheDir(), CONNECT_TIMEOUT);
 		List<String> lines = Files.readAllLines(versionFile);
 		if (!lines.isEmpty()) {
 			return lines.get(0);

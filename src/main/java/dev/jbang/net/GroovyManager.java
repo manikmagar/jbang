@@ -1,6 +1,6 @@
 package dev.jbang.net;
 
-import static dev.jbang.cli.BaseCommand.EXIT_UNEXPECTED_STATE;
+import static dev.jbang.ExitException.EXIT_UNEXPECTED_STATE;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,13 +9,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import dev.jbang.Cache;
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
-import dev.jbang.cli.ExitException;
+import dev.jbang.util.NetUtil;
 import dev.jbang.util.UnpackUtil;
 import dev.jbang.util.Util;
 
 public class GroovyManager {
-	public static final String DEFAULT_GROOVY_VERSION = "3.0.9";
+	public static final String DEFAULT_GROOVY_VERSION = "4.0.30";
 
 	public static String resolveInGroovyHome(String cmd, String requestedVersion) {
 		Path groovyHome = getGroovy(requestedVersion);
@@ -43,7 +44,7 @@ public class GroovyManager {
 		Util.deletePath(groovyTmpDir, false);
 		Util.deletePath(groovyOldDir, false);
 		try {
-			Path groovyPkg = Util.downloadAndCacheFile(url);
+			Path groovyPkg = NetUtil.downloadAndCacheFile(url);
 			Util.infoMsg("Installing Groovy " + version + "...");
 			Util.verboseMsg("Unpacking to " + groovyDir);
 			UnpackUtil.unpack(groovyPkg, groovyTmpDir);
@@ -77,7 +78,7 @@ public class GroovyManager {
 	}
 
 	private static String getGroovyDownloadUrl(String version) {
-		int groovyMajorVersion = 3;
+		int groovyMajorVersion = 4;
 		Matcher matcher = Pattern.compile("(\\d)\\..*").matcher(version);
 		if (matcher.find()) {
 			groovyMajorVersion = Integer.parseInt(matcher.group(1));

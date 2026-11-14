@@ -1,6 +1,6 @@
 package dev.jbang.net;
 
-import static dev.jbang.cli.BaseCommand.EXIT_UNEXPECTED_STATE;
+import static dev.jbang.ExitException.EXIT_UNEXPECTED_STATE;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,8 +11,9 @@ import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
-import dev.jbang.cli.ExitException;
+import dev.jbang.util.NetUtil;
 import dev.jbang.util.UnpackUtil;
 import dev.jbang.util.Util;
 
@@ -44,7 +45,7 @@ public class EditorManager {
 		Util.deletePath(editorTmpDir, false);
 		Util.deletePath(editorOldDir, false);
 		try {
-			Path jdkPkg = Util.downloadAndCacheFile(url);
+			Path jdkPkg = NetUtil.downloadAndCacheFile(url);
 			Util.infoMsg("Installing VSCodium " + version + "...");
 			Util.verboseMsg("Unpacking to " + editorDir.toString());
 			UnpackUtil.unpackEditor(jdkPkg, editorTmpDir);
@@ -72,10 +73,14 @@ public class EditorManager {
 
 	private static String getVSCodiumDownloadURL(String version) {
 		String os = Util.getOS().name();
+		String arch = Util.getArch().name();
 
-		if (os.equals("mac")) {
+		if (Util.isMac()) {
 			os = "darwin";
-		} else if (os.equals("windows")) {
+			if ("aarch64".equals(arch)) {
+				arch = "arm64";
+			}
+		} else if (Util.isWindows()) {
 			os = "win32";
 		}
 
@@ -83,7 +88,7 @@ public class EditorManager {
 		if (Util.isWindows() || Util.isMac()) {
 			suffix = "zip";
 		}
-		String url = String.format(CODIUM_DOWNLOAD_URL, version, os, Util.getArch().name(), version, suffix);
+		String url = String.format(CODIUM_DOWNLOAD_URL, version, os, arch, version, suffix);
 		return url;
 	}
 
@@ -92,7 +97,7 @@ public class EditorManager {
 		try {
 			Util.verboseMsg("Lookup vscodium latest version...");
 			try (InputStream is = new URL("https://api.github.com/repos/vscodium/vscodium/releases/latest")
-																											.openStream();
+				.openStream();
 					Scanner sc = new Scanner(is, "UTF-8")) {
 				String out = sc.useDelimiter("\\A").next();
 				Matcher matcher = Pattern.compile("\"tag_name\":.*?\"(.*?)\"").matcher(out);

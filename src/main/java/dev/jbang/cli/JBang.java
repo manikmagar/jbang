@@ -1,347 +1,155 @@
 package dev.jbang.cli;
 
-import static java.lang.System.err;
-import static java.util.Arrays.asList;
-import static picocli.CommandLine.Command;
-import static picocli.CommandLine.Help.Column.Overflow.SPAN;
-import static picocli.CommandLine.Help.Column.Overflow.WRAP;
-import static picocli.CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST;
-import static picocli.CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST_HEADING;
-import static picocli.CommandLine.Option;
-import static picocli.CommandLine.ScopeType;
+import java.io.IOException;
+import java.util.EnumSet;
 
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.ResourceBundle;
-import java.util.Set;
-import java.util.concurrent.Future;
+import org.aesh.AeshRuntimeRunner;
+import org.aesh.command.AeshCommandRuntimeBuilder;
+import org.aesh.command.ArgumentsSection;
+import org.aesh.command.Command;
+import org.aesh.command.CommandDefinition;
+import org.aesh.command.CommandResult;
+import org.aesh.command.CommandRuntime;
+import org.aesh.command.Execution;
+import org.aesh.command.Executor;
+import org.aesh.command.HelpFeature;
+import org.aesh.command.impl.parser.CommandLineParser;
+import org.aesh.command.impl.registry.AeshCommandRegistryBuilder;
+import org.aesh.command.option.Option;
+import org.aesh.command.registry.CommandRegistry;
 
-import dev.jbang.Configuration;
+import dev.jbang.ExitException;
+import dev.jbang.Main;
 import dev.jbang.util.Util;
-import dev.jbang.util.VersionChecker;
 
-import picocli.CommandLine;
-import picocli.CommandLine.Help.TextTable;
-import picocli.CommandLine.Model.CommandSpec;
-import picocli.CommandLine.Model.UsageMessageSpec;
-
-@Command(name = "jbang", header = "${COMMAND-NAME} is a tool for building and running .java/.jsh scripts and jar packages.", footer = "\nCopyright: 2020-2022 jbang.dev contributors, License: MIT\nWebsite: https://jbang.dev", description = {
-		"",
-		"  ${COMMAND-NAME} init hello.java [args...]",
-		"        (to initialize a script)",
-		"  or  ${COMMAND-NAME} edit --open=code --live hello.java",
-		"        (to edit a script in IDE with live updates)",
-		"  or  ${COMMAND-NAME} hello.java [args...]",
-		"        (to run a .java file)",
-		"  or  ${COMMAND-NAME} gavsearch@jbangdev [args...]",
-		"        (to run a alias from a catalog)",
-		"  or  ${COMMAND-NAME} group-id:artifact-id:version [args...]",
-		"        (to run a .jar file found with a GAV id)",
-
-		"" }, versionProvider = VersionProvider.class, subcommands = {
-				Run.class, Build.class, Edit.class, Init.class, Alias.class, Template.class, Catalog.class, Trust.class,
-				Cache.class, Completion.class, Jdk.class, Version.class, Wrapper.class, Info.class, App.class,
-				Export.class, Config.class })
+@CommandDefinition(name = "jbang", description = "jbang is a tool for building and running .java/.jsh scripts and jar packages.", groupCommands = {
+		Run.class, Build.class, Init.class, Edit.class, Deps.class,
+		Cache.class, Export.class, Jdk.class,
+		Config.class, Trust.class, Alias.class, Template.class, Catalog.class, App.class,
+		Skill.class, Completion.class, Info.class, Version.class,
+		Wrapper.class }, helpSectionProvider = ExternalCommandsProvider.class)
 public class JBang extends BaseCommand {
 
-	@CommandLine.Option(names = { "-V",
-			"--version" }, versionHelp = true, description = "Display version info (use `jbang --verbose version` for more details)")
+	/**
+	 * Fleet-wide help formatting applied to every (sub)command: collapse the long
+	 * option list in the synopsis, and print a command's own options before
+	 * inherited global options. Set once here instead of repeating the toggles on
+	 * every {@code @CommandDefinition}.
+	 */
+	public static final EnumSet<HelpFeature> HELP_DEFAULTS = EnumSet.of(
+			HelpFeature.COLLAPSE_SYNOPSIS, HelpFeature.DEFAULT_OPTIONS_FIRST,
+			HelpFeature.HEADER_BEFORE_SYNOPSIS);
+
+	/**
+	 * Render positional arguments in their own "Arguments:" section. In aesh 3.19
+	 * this moved out of {@link HelpFeature} into a separate placement enum.
+	 */
+	public static final ArgumentsSection ARGUMENTS_SECTION = ArgumentsSection.FIRST;
+
+	@Option(shortName = 'V', name = "version", hasValue = false, helpGroup = "Global options", description = "Display version info (use `jbang --verbose version` for more details)")
 	boolean versionRequested;
 
-	@CommandLine.Option(names = { "--preview" }, description = "Enable preview features")
-	void setPreview(boolean preview) {
-		Util.setPreview(preview);
-	}
-
-	@CommandLine.ArgGroup(exclusive = true)
-	VerboseQuietExclusive verboseQuietExclusive = new VerboseQuietExclusive();
-
-	static class VerboseQuietExclusive {
-		@Option(names = {
-				"--verbose" }, description = "jbang will be verbose on what it does.", scope = ScopeType.INHERIT)
-		void setVerbose(boolean verbose) {
-			Util.setVerbose(verbose);
-		}
-
-		@Option(names = {
-				"--quiet" }, description = "jbang will be quiet, only print when error occurs.", scope = ScopeType.INHERIT)
-		void setQuiet(boolean quiet) {
-			Util.setQuiet(quiet);
-		}
-	}
-
-	@CommandLine.ArgGroup(exclusive = true)
-	OfflineFreshExclusive offlineFreshExclusive = new OfflineFreshExclusive();
-
-	static class OfflineFreshExclusive {
-		@CommandLine.Option(names = { "-o",
-				"--offline" }, description = "Work offline. Fail-fast if dependencies are missing. No connections will be attempted", scope = ScopeType.INHERIT)
-		void setOffline(boolean offline) {
-			Util.setOffline(offline);
-		}
-
-		@CommandLine.Option(names = {
-				"--fresh" }, description = "Make sure we use fresh (i.e. non-cached) resources.", scope = ScopeType.INHERIT)
-		void setFresh(boolean fresh) {
-			Util.setFresh(fresh);
-		}
-	}
-
-	public Integer doCall() {
-		spec.commandLine().usage(err);
-		return EXIT_OK;
-	}
-
-	public static CommandLine getCommandLine() {
+	@Override
+	public void beforeParse() {
 		Util.setVerbose(false);
 		Util.setQuiet(false);
 		Util.setOffline(false);
 		Util.setFresh(false);
 		Util.setPreview(false);
-		PrintWriter errW = new PrintWriter(err, true);
-		return getCommandLine(errW, errW);
+		Util.setPrintExceptions(false);
 	}
 
-	static CommandLine.IExecutionExceptionHandler executionExceptionHandler = new CommandLine.IExecutionExceptionHandler() {
-		@Override
-		public int handleExecutionException(Exception ex, CommandLine commandLine, CommandLine.ParseResult parseResult)
-				throws Exception {
-			Util.errorMsg(null, ex);
-			if (Util.isVerbose()) {
-				Util.infoMsg(
-						"If you believe this a bug in jbang, open an issue at https://github.com/jbangdev/jbang/issues");
-			}
-
-			if (ex instanceof ExitException) {
-				return ((ExitException) ex).getStatus();
-			} else {
-				return EXIT_INTERNAL_ERROR;
-			}
+	public Integer doCall() throws IOException {
+		if (versionRequested) {
+			System.out.println(Util.getJBangVersion());
+			return ExitException.EXIT_OK;
 		}
-	};
+		if (commandInvocation != null) {
+			System.err.println(commandInvocation.getHelpInfo());
+		}
+		return ExitException.EXIT_OK;
+	}
 
-	static CommandLine.IExitCodeExceptionMapper exitCodeExceptionMapper = new CommandLine.IExitCodeExceptionMapper() {
-		@Override
-		public int getExitCode(Throwable t) {
-			if (t instanceof ExitException) {
-				return ((ExitException) t).getStatus();
-			} else if (t instanceof CommandLine.ParameterException) {
-				return EXIT_INVALID_INPUT;
+	public static int execute(String... args) {
+		try {
+			String[] newArgs = Main.handleDefaultRun(args);
+			CommandResult result = AeshRuntimeRunner.builder()
+				.helpDefaults(HELP_DEFAULTS)
+				.argumentsSectionDefault(ARGUMENTS_SECTION)
+				.command(JBang.class)
+				.args(newArgs)
+				.defaultValueProvider(new JBangDefaultValueProvider())
+				.execute();
+			return result != null ? result.getResultValue() : ExitException.EXIT_OK;
+		} catch (ExitException e) {
+			return e.getStatus();
+		} catch (RuntimeException e) {
+			Throwable cause = e.getCause();
+			Throwable deepest = e;
+			while (cause != null) {
+				if (cause instanceof ExitException) {
+					return ((ExitException) cause).getStatus();
+				}
+				deepest = cause;
+				cause = cause.getCause();
 			}
-			return EXIT_GENERIC_ERROR;
+			if (deepest instanceof RuntimeException) {
+				throw (RuntimeException) deepest;
+			}
+			throw e;
 		}
-	};
+	}
 
-	static CommandLine.IExecutionStrategy executionStrategy = new CommandLine.RunLast() {
-		@Override
-		protected List<Object> handle(CommandLine.ParseResult parseResult) throws CommandLine.ExecutionException {
-			Util.verboseMsg("jbang version " + Util.getJBangVersion());
-			Future<String> versionCheckResult = VersionChecker.newerVersionAsync();
-			List<Object> result = super.handle(parseResult);
-			VersionChecker.informOrCancel(versionCheckResult);
-			return result;
-		}
-	};
-
-	static CommandLine.IDefaultValueProvider defaultValueProvider = new CommandLine.IDefaultValueProvider() {
-		@Override
-		public String defaultValue(CommandLine.Model.ArgSpec argSpec) {
-			String val = null;
-			if (argSpec.isOption()
-					&& argSpec.defaultValue() == null
-					&& Util.isNullOrEmptyString(((CommandLine.Model.OptionSpec) argSpec).fallbackValue())) {
-				String key = argSpecKey(argSpec);
-				String propkey = "jbang." + key;
-				if (System.getProperties().containsValue(propkey)) {
-					val = System.getProperty(propkey);
-				} else {
-					Configuration cfg = Configuration.instance();
-					if (cfg.containsKey(key)) {
-						val = Objects.toString(cfg.get(key));
-					}
+	/**
+	 * Renders the help text for a (sub)command as it would appear with
+	 * {@code --help}. Pass the command path, e.g. {@code renderHelp("run")} or
+	 * {@code renderHelp("jdk", "install")}. With no arguments the root help is
+	 * returned.
+	 */
+	public static String renderHelp(String... commandPath) {
+		try {
+			CommandRegistry registry = AeshCommandRegistryBuilder.builder()
+				.helpDefaults(HELP_DEFAULTS)
+				.argumentsSectionDefault(ARGUMENTS_SECTION)
+				.command(JBang.class)
+				.create();
+			String rootName = (String) registry.getAllCommandNames().iterator().next();
+			CommandLineParser<?> parser = registry.getCommand(rootName, rootName)
+				.getParser();
+			for (String name : commandPath) {
+				parser = parser.getChildParser(name);
+				if (parser == null) {
+					throw new IllegalArgumentException("Unknown command: " + name);
 				}
 			}
-			return val;
-		}
-	};
-
-	static String argSpecKey(CommandLine.Model.ArgSpec argSpec) {
-		List<String> cmdNames = names(argSpec.command());
-		String cmdName = cmdNames.isEmpty() ? "all" : String.join(".", cmdNames);
-		String optName = stripDashes(((CommandLine.Model.OptionSpec) argSpec).longestName()).replace("-", "");
-		return cmdName + "." + optName;
-	}
-
-	private static List<String> names(CommandSpec cmd) {
-		List<String> result = new ArrayList<>();
-		while (!cmd.name().equalsIgnoreCase("jbang")) {
-			result.add(0, cmd.name());
-			cmd = cmd.parent();
-		}
-		return result;
-	}
-
-	private static String stripDashes(String name) {
-		if (name.startsWith("--")) {
-			return name.substring(2);
-		} else if (name.startsWith("-")) {
-			return name.substring(1);
-		} else {
-			return name;
+			return parser.printHelp();
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to render help", e);
 		}
 	}
 
-	static class ConfigurationResourceBundle extends ResourceBundle {
-		@Override
-		protected Object handleGetObject(String propkey) {
-			if (propkey.startsWith("jbang.")) {
-				String key = propkey.substring(6);
-				return Configuration.instance().get(key);
-			} else {
-				return null;
-			}
-		}
-
-		@Override
-		public Enumeration<String> getKeys() {
-			return Collections.enumeration(Configuration.instance().keySet());
-		}
-	}
-
-	public static CommandLine getCommandLine(PrintWriter localout, PrintWriter localerr) {
-		CommandLine cl = new CommandLine(new JBang());
-
-		cl.getHelpSectionMap().remove(SECTION_KEY_COMMAND_LIST_HEADING);
-		cl.getHelpSectionMap().put(SECTION_KEY_COMMAND_LIST, getCommandRenderer());
-
-		return cl	.setExitCodeExceptionMapper(exitCodeExceptionMapper)
-					.setExecutionExceptionHandler(executionExceptionHandler)
-					.setParameterExceptionHandler(new DeprecatedMessageHandler(cl.getParameterExceptionHandler()))
-					.setExecutionStrategy(executionStrategy)
-					.setDefaultValueProvider(defaultValueProvider)
-					.setResourceBundle(new ConfigurationResourceBundle())
-					.setStopAtPositional(true)
-					.setOut(localout)
-					.setErr(localerr);
-	}
-
-	public static CommandGroupRenderer getCommandRenderer() {
-		Map<String, List<String>> sections = new LinkedHashMap<>();
-		sections.put("Essentials", asList("run", "build"));
-		sections.put("Editing", asList("init", "edit"));
-		sections.put("Caching", asList("cache", "export", "jdk"));
-		sections.put("Configuration", asList("config", "trust", "alias", "template", "catalog", "app"));
-		sections.put("Other", asList("completion", "info", "version", "wrapper"));
-		CommandGroupRenderer renderer = new CommandGroupRenderer(sections);
-		return renderer;
-	}
-
-	public static class CommandGroupRenderer implements CommandLine.IHelpSectionRenderer {
-		private final Map<String, List<String>> sections;
-
-		public CommandGroupRenderer(Map<String, List<String>> sections) {
-			this.sections = sections;
-		}
-
-		/**
-		 * validate all commands in Help is covered by section and each section command
-		 * exist in help.
-		 * 
-		 * @param help
-		 */
-		public void validate(CommandLine.Help help) {
-			Set<String> cmds = new HashSet<>();
-			sections.forEach((key, value) -> cmds.addAll(value));
-
-			Set<String> actualcmds = new HashSet<>(help.subcommands().keySet());
-
-			actualcmds.removeAll(cmds);
-
-			cmds.removeAll(help.subcommands().keySet());
-
-			if (cmds.size() > 0) {
-				throw new IllegalStateException("Section help defined for non existent commands" + cmds);
-			}
-
-			if (actualcmds.size() > 0) {
-				throw new IllegalStateException(("Commands found with no assigned section" + actualcmds));
-			}
-
-			sections.forEach((key, value) -> cmds.addAll(value));
-
-		}
-
-		// @Override
-		public String render(CommandLine.Help help) {
-			if (help.commandSpec().subcommands().isEmpty()) {
-				return "";
-			}
-
-			StringBuilder result = new StringBuilder();
-
-			sections.forEach((key, value) -> result.append(renderSection(key, value, help)));
-			return result.toString();
-		}
-
-		private String renderSection(String sectionHeading, List<String> cmdNames, CommandLine.Help help) {
-			TextTable textTable = createTextTable(help);
-
-			for (String name : cmdNames) {
-				CommandSpec sub = help.commandSpec().subcommands().get(name).getCommandSpec();
-
-				// create comma-separated list of command name and aliases
-				String names = sub.names().toString();
-				names = names.substring(1, names.length() - 1); // remove leading '[' and trailing ']'
-
-				// description may contain line separators; use Text::splitLines to handle this
-				String description = description(sub.usageMessage());
-				CommandLine.Help.Ansi.Text[] lines = help.colorScheme().text(description).splitLines();
-
-				for (int i = 0; i < lines.length; i++) {
-					CommandLine.Help.Ansi.Text cmdNamesText = help.colorScheme().commandText(i == 0 ? names : "");
-					textTable.addRowValues(cmdNamesText, lines[i]);
-				}
-			}
-			return help.createHeading("%n" + sectionHeading + ":%n") + textTable.toString();
-		}
-
-		private TextTable createTextTable(CommandLine.Help help) {
-			CommandSpec spec = help.commandSpec();
-			// prepare layout: two columns
-			// the left column overflows, the right column wraps if text is too long
-			int commandLength = maxLength(spec.subcommands(), 37);
-			TextTable textTable = TextTable.forColumns(help.colorScheme(),
-					new CommandLine.Help.Column(commandLength + 2, 2, SPAN),
-					new CommandLine.Help.Column(spec.usageMessage().width() - (commandLength + 2), 2, WRAP));
-			textTable.setAdjustLineBreaksForWideCJKCharacters(
-					spec.usageMessage().adjustLineBreaksForWideCJKCharacters());
-			return textTable;
-		}
-
-		private int maxLength(Map<String, CommandLine> subcommands, int max) {
-			int result = subcommands.values()
-									.stream()
-									.map(cmd -> cmd.getCommandSpec().names().toString().length() - 2)
-									.max(Integer::compareTo)
-									.get();
-			return Math.min(max, result);
-		}
-
-		private String description(UsageMessageSpec usageMessage) {
-			if (usageMessage.header().length > 0) {
-				return usageMessage.header()[0];
-			}
-			if (usageMessage.description().length > 0) {
-				return usageMessage.description()[0];
-			}
-			return "";
+	@SuppressWarnings("unchecked")
+	public static <T extends Command> T parseCommand(String... args) {
+		try {
+			String[] newArgs = Main.handleDefaultRun(args);
+			CommandRegistry registry = AeshCommandRegistryBuilder.builder()
+				.helpDefaults(HELP_DEFAULTS)
+				.argumentsSectionDefault(ARGUMENTS_SECTION)
+				.command(JBang.class)
+				.create();
+			CommandRuntime runtime = AeshCommandRuntimeBuilder.builder()
+				.commandRegistry(registry)
+				.defaultValueProvider(new JBangDefaultValueProvider())
+				.build();
+			String commandName = (String) registry.getAllCommandNames().iterator().next();
+			Executor<?> executor = runtime.buildExecutor(commandName, newArgs);
+			Execution<?> execution = executor.getExecutions().get(executor.getExecutions().size() - 1);
+			execution.populateCommand();
+			T cmd = (T) execution.getCommand();
+			return cmd;
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to parse command", e);
 		}
 	}
+
 }

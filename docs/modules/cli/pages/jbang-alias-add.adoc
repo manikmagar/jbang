@@ -1,114 +1,186 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-alias-add(1)
+= JBANG ALIAS ADD
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang alias add -- Add alias for script reference.
 
-jbang-alias-add - Add alias for script reference.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang alias add [OPTIONS] [<scriptOrFile>] [<params>...]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Saves a script, jar or GAV under a name, together with any options and arguments
+you give (dependencies, runtime options, ...), so `jbang <name>` reproduces it.
 
-*jbang alias add* *-o* [*-gh*] *--fresh* *--quiet* *--verbose* [*--config*=_<config>_]
-                [*-d*=_<description>_] [*-f*=_<catalogFile>_] [*-j*=_<javaVersion>_]
-                [*-m*=_<mainClass>_] [*--name*=_<name>_] [*--cp*=_<classpaths>_]...
-                [*-D*=_<String=String>_]... [*--deps*=_<dependencies>_]...
-                [*--java-options*=_<javaRuntimeOptions>_]...
-                [*--repos*=_<repositories>_]... _scriptOrFile_ [_params_...]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang alias add --name hello hello.java
+jbang alias add --name cowsay --deps org.slf4j:slf4j-simple:2.0.9 cowsay.java
+jbang alias add --name greet hello.java World
+jbang alias add --global --name tool org.example:tool:1.0 serve
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Add alias for script reference.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-s*, *--sources*=<sources>::
+Add additional sources.
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--files*=<files>::
+Add additional files.
 
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
+*-T*, *--source-type*=<source-type>::
+Force input to be interpreted as the given type. One of: java, jshell, kotlin, groovy, markdown.
 
-*--cp, --class-path*=_<classpaths>_::
-  Add class path entries.
+*--jsh*::
+Force input to be interpreted with jsh/jshell. Deprecated: use '--source-type jshell'
 
-*-d*, *--description*=_<description>_::
-  A description for the alias
+*--catalog*=<catalog>::
+Path to catalog file to be used instead of the default
 
-*-D*, _<String=String>_::
-  set a system property
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
 
-*--deps*=_<dependencies>_::
-  Add additional dependencies (Use commas to separate them).
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
 
-*-f*, *--file*=_<catalogFile>_::
-  Path to the catalog file to use
+*-j*, *--java*=<java>::
+JDK version to use for running the script.
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*-m*, *--main*=<main>::
+Main class to use when running. Used primarily for running jar's. Can be a glob pattern using ? and *.
+
+*--module*=<module>::
+Treat resource as a module. Optionally with the given module name
+
+*-C*, *--compile-option*=<compile-option>::
+Options to pass to the compiler
+
+*--manifest*=<key>=<value>::
+Add entry to the JAR manifest (e.g. --manifest=Main-Class=com.example.Main)
+
+*--[no-]integrations*::
+Enable or disable integration execution (default: true)
+
+*-D*=<key>=<value>::
+set a system property
++
+Default: `true`
+
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
+
+*--repos*=<repos>::
+Add additional repositories.
+
+*--cp*=<cp>::
+Add class path entries.
++
+Aliases: `--class-path`
+
+*--ignore-transitive-repositories*::
+Ignore remote repositories found in transitive dependencies
++
+Aliases: `--itr`
+
+*-n*, *--native*::
+Build using native-image
+
+*-N*, *--native-option*=<native-option>::
+Options to pass to the native image tool
+
+*-R*, *--runtime-option*=<runtime-option>::
+Options to pass to the Java runtime
++
+Aliases: `--java-options`
+
+*--jfr*=<jfr>::
+Launch with Java Flight Recorder enabled.
+
+*-d*, *--debug*=<debug>::
+Launch with java debug enabled. Set host/port or provide key/value list of JPDA options (default: )
+
+*--enableassertions*::
+Enable assertions
++
+Aliases: `--ea`
+
+*--enablesystemassertions*::
+Enable system assertions
++
+Aliases: `--esa`
+
+*--javaagent*=<key>=<value>::
+Java agent to use
++
+Default: ``
+
+*--[no-]cds*::
+If specified Class Data Sharing (CDS) will be used for building and running (requires Java 13+)
+
+*-i*, *--interactive*::
+Activate interactive mode
 
 *-g*, *--global*::
-  Use the global (user) catalog file
+Use the global (user) catalog file
+
+*-f*, *--file*=<file>::
+Path to the catalog file to use
+
+*--description*=<description>::
+A description for the alias
+
+*--name*=<name>::
+A name for the alias
+
+*--force*::
+Force overwriting of existing alias
+
+*--enable-preview*::
+Activate Java preview features
+
+*--docs*=<docs>::
+Documentation reference for the alias
 
 *-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
+Display this help and exit
 
-*-j*, *--java*=_<javaVersion>_::
-  JDK version to use for running the alias.
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--java-options*=_<javaRuntimeOptions>_::
-  A Java runtime option
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*-m*, *--main*=_<mainClass>_::
-  Main class to use when running. Used primarily for running jar's.
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--name*=_<name>_::
-  A name for the alias
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-*--repos*=_<repositories>_::
-  Add additional repositories.
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// end::picocli-generated-man-section-options[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+== ARGUMENTS
 
-_scriptOrFile_::
-  A file or URL to a Java code file
+*<scriptOrFile>*::
+A file or URL to a Java code file
 
-[_params_...]::
-  Parameters to pass on to the script
+*<params>*::
+Parameters to pass on to the script
 
-// end::picocli-generated-man-section-arguments[]
-
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
-
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

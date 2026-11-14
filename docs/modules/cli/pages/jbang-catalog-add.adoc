@@ -1,87 +1,81 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-catalog-add(1)
+= JBANG CATALOG ADD
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang catalog add -- Add a catalog.
 
-jbang-catalog-add - Add a catalog.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang catalog add [OPTIONS] <fileOrURL>
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Registers a catalog under a name. Give a file, a URL, or a short GitHub
+reference such as `jbangdev` (the jbangdev/jbang-catalog repository).
 
-*jbang catalog add* *-o* [*-gh*] *--fresh* *--quiet* *--verbose* [*--config*=_<config>_]
-                  [*-d*=_<description>_] [*-f*=_<catalogFile>_] [*--name*=_<name>_]
-                  _urlOrFile_
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang catalog add --name demo jbangdev
+jbang catalog add --name team myteam/jbang-tools
+jbang catalog add --global --name local ./jbang-catalog.json
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Add a catalog.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-d*, *--description*=<description>::
+A description for the catalog
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--name*=<name>::
+A name for the catalog
 
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
+*--force*::
+Force overwriting of existing catalog
 
-*-d*, *--description*=_<description>_::
-  A description for the catalog
-
-*-f*, *--file*=_<catalogFile>_::
-  Path to the catalog file to use
-
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--import*::
+Import catalog items into the catalog's scope
 
 *-g*, *--global*::
-  Use the global (user) catalog file
+Use the global (user) catalog file
+
+*-f*, *--file*=<file>::
+Path to the catalog file to use
 
 *-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
+Display this help and exit
 
-*--name*=_<name>_::
-  A name for the alias
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-// end::picocli-generated-man-section-options[]
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-_urlOrFile_::
-  A file or URL to a catalog file
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// end::picocli-generated-man-section-arguments[]
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+== ARGUMENTS
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+*<fileOrURL>*::
+A file or URL to a catalog file
 
-// end::picocli-generated-full-manpage[]

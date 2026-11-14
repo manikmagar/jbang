@@ -10,19 +10,19 @@ import dev.jbang.util.Util;
 public class DependencyResolver {
 	private final Set<MavenRepo> repositories;
 	private final Set<String> dependencies;
-	private final Set<ArtifactInfo> artifacts;
+	private final Set<String> classPaths;
 
 	public DependencyResolver() {
 		repositories = new LinkedHashSet<>();
 		dependencies = new LinkedHashSet<>();
-		artifacts = new LinkedHashSet<>();
+		classPaths = new LinkedHashSet<>();
 	}
 
 	public DependencyResolver addRepository(MavenRepo repository) {
-		MavenRepo repo = repositories	.stream()
-										.filter(r -> r.getId().equals(repository.getId()))
-										.findFirst()
-										.orElse(null);
+		MavenRepo repo = repositories.stream()
+			.filter(r -> r.getId().equals(repository.getId()))
+			.findFirst()
+			.orElse(null);
 		if (repo != null && !repo.getUrl().equals(repository.getUrl())) {
 			throw new IllegalArgumentException("Repository with duplicate id and different url: "
 					+ repository + " vs " + repo);
@@ -50,19 +50,9 @@ public class DependencyResolver {
 		return this;
 	}
 
-	public DependencyResolver addArtifact(ArtifactInfo artifact) {
-		artifacts.add(artifact);
-		return this;
-	}
-
-	public DependencyResolver addArtifacts(List<ArtifactInfo> artifacts) {
-		this.artifacts.addAll(artifacts);
-		return this;
-	}
-
 	public DependencyResolver addClassPath(String classPath) {
-		// WARN need File here because it's more lenient about paths than Path!
-		return addArtifact(DependencyCache.findArtifactByPath(new File(classPath).toPath()));
+		classPaths.add(classPath);
+		return this;
 	}
 
 	public DependencyResolver addClassPaths(List<String> classPaths) {
@@ -72,19 +62,20 @@ public class DependencyResolver {
 		return this;
 	}
 
-	public DependencyResolver addClassPaths(String classPaths) {
-		return addClassPaths(Arrays.asList(classPaths.split(" ")));
-	}
-
 	public ModularClassPath resolve() {
 		ModularClassPath mcp = DependencyUtil.resolveDependencies(
 				new ArrayList<>(dependencies), new ArrayList<>(repositories),
-				Util.isOffline(), Util.isFresh(), !Util.isQuiet());
-		if (artifacts.isEmpty()) {
+				Util.isOffline(), Util.isIgnoreTransitiveRepositories(), Util.isFresh(), !Util.isQuiet(),
+				Util.downloadSources());
+		if (classPaths.isEmpty()) {
 			return mcp;
 		} else {
-			List<ArtifactInfo> arts = Stream.concat(mcp.getArtifacts().stream(), artifacts.stream())
-											.collect(Collectors.toList());
+			// WARN need File here because it's more lenient about paths than Path!
+			Stream<ArtifactInfo> cpas = classPaths
+				.stream()
+				.map(p -> new ArtifactInfo(null, new File(p).toPath()));
+			List<ArtifactInfo> arts = Stream.concat(mcp.getArtifacts().stream(), cpas)
+				.collect(Collectors.toList());
 			return new ModularClassPath(arts);
 		}
 	}

@@ -1,0 +1,95 @@
+= JBANG INFO DOCS
+
+== NAME
+
+jbang info docs -- Open the documentation file in the default browser.
+
+== SYNOPSIS
+
+[source]
+----
+jbang info docs [OPTIONS] [<scriptOrFile>]
+----
+
+== OPTIONS
+
+*--[no-]open*::
+Open the (first) documentation file/link in the default browser
+
+*-s*, *--sources*=<sources>::
+Add additional sources.
+
+*--files*=<files>::
+Add additional files.
+
+*-T*, *--source-type*=<source-type>::
+Force input to be interpreted as the given type. One of: java, jshell, kotlin, groovy, markdown.
+
+*--jsh*::
+Force input to be interpreted with jsh/jshell. Deprecated: use '--source-type jshell'
+
+*--catalog*=<catalog>::
+Path to catalog file to be used instead of the default
+
+*-D*=<key>=<value>::
+set a system property
++
+Default: `true`
+
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
+
+*--repos*=<repos>::
+Add additional repositories.
+
+*--cp*=<cp>::
+Add class path entries.
++
+Aliases: `--class-path`
+
+*--ignore-transitive-repositories*::
+Ignore remote repositories found in transitive dependencies
++
+Aliases: `--itr`
+
+*--build-dir*=<build-dir>::
+Use given directory for build results
+
+*--module*=<module>::
+Treat resource as a module. Optionally with the given module name
+
+*-h*, *--help*::
+Display this help and exit
+
+*--config*=<config>::
+Path to config file to be used instead of the default
+
+*--insecure*::
+Enable insecure trust of all SSL certificates.
+
+*--[no-]verbose*::
+jbang will be verbose on what it does.
+
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
+
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
+
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
+
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
+
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
+
+*--no-netrc*::
+Disable .netrc authentication lookup.
+
+== ARGUMENTS
+
+*<scriptOrFile>*::
+A file or URL to a Java code file
+

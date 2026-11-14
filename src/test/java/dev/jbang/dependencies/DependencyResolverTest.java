@@ -1,6 +1,8 @@
 package dev.jbang.dependencies;
 
 import static dev.jbang.dependencies.DependencyUtil.toMavenRepo;
+import static dev.jbang.util.JavaUtil.defaultJdkManager;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayWithSize;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.jbang.BaseTest;
 import dev.jbang.Settings;
+import dev.jbang.devkitman.Jdk;
 import dev.jbang.util.PropertiesValueResolver;
 import dev.jbang.util.Util;
 
@@ -102,7 +105,7 @@ class DependencyResolverTest extends BaseTest {
 		detector.detect(p, Collections.emptyList());
 
 		List<String> deps = Collections.singletonList(
-				PropertiesValueResolver.replaceProperties("org.openjfx:javafx-base:11.0.2:${os.detected.jfxname}", p));
+				PropertiesValueResolver.replaceProperties("org.openjfx:javafx-base:18.0.2:${os.detected.jfxname}", p));
 		List<ArtifactInfo> artifacts = ArtifactResolver.Builder.create().build().resolve(deps);
 		assertEquals(1, artifacts.size());
 	}
@@ -118,12 +121,12 @@ class DependencyResolverTest extends BaseTest {
 	void testResolveDependenciesAltRepo(@TempDir File altrepo) {
 		List<String> deps = Arrays.asList("com.offbytwo:docopt:0.6.0.20150202", "log4j:log4j:1.2+");
 		List<ArtifactInfo> artifacts = ArtifactResolver.Builder
-																.create()
-																.localFolder(altrepo.toPath())
-																.build()
-																.resolve(deps);
+			.create()
+			.localFolder(altrepo.toPath())
+			.build()
+			.resolve(deps);
 		assertEquals(2, artifacts.size());
-		assertThat(altrepo.listFiles(), arrayWithSize(4));
+		assertThat(altrepo.listFiles(), arrayWithSize(5)); // +1 is prefix file
 	}
 
 	@Test
@@ -133,11 +136,25 @@ class DependencyResolverTest extends BaseTest {
 	}
 
 	@Test
+	void testRelativePathsRepos() {
+		assertThat(toMavenRepo("local=./build/repo").getUrl().toString())
+			.startsWith("file:///")
+			.endsWith("/build/repo");
+	}
+
+	@Test
+	void test() {
+		assertEquals(toMavenRepo("jbossorg").getUrl(), "https://repository.jboss.org/nexus/content/groups/public/");
+		assertEquals(toMavenRepo("redhat").getUrl(), "https://maven.repository.redhat.com/ga/");
+	}
+
+	@Test
 	void testResolveDependencies() {
 		List<String> deps = Arrays.asList("com.offbytwo:docopt:0.6.0.20150202", "log4j:log4j:1.2+");
 
 		ModularClassPath classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false,
-				true);
+				false,
+				true, false);
 
 		// if returns 5 its because optional deps are included which they shouldn't
 		assertEquals(2, classpath.getClassPaths().size());
@@ -149,7 +166,8 @@ class DependencyResolverTest extends BaseTest {
 				"org.apache.commons:commons-text:1.8");
 
 		ModularClassPath classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false,
-				true);
+				false,
+				true, false);
 
 		// if returns with duplicates its because some dependencies are multiple times
 		// in the
@@ -170,7 +188,8 @@ class DependencyResolverTest extends BaseTest {
 		List<String> deps = Collections.singletonList("com.github.docker-java:docker-java:3.1.5");
 
 		ModularClassPath classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false,
-				true);
+				false,
+				true, false);
 
 		assertEquals(46, classpath.getClassPaths().size());
 	}
@@ -181,14 +200,15 @@ class DependencyResolverTest extends BaseTest {
 		List<String> deps = Arrays.asList("org.openjfx:javafx-graphics:11.0.2:mac", "com.offbytwo:docopt:0.6+");
 
 		ModularClassPath cp = new ModularClassPath(
-				DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false, true).getArtifacts()) {
+				DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false, false, true, false)
+					.getArtifacts()) {
 			@Override
-			protected boolean supportsModules(String requestedVersion) {
+			protected boolean supportsModules(Jdk jdk) {
 				return true;
 			}
 		};
 
-		List<String> ma = cp.getAutoDectectedModuleArguments(null);
+		List<String> ma = cp.getAutoDectectedModuleArguments(defaultJdkManager().getOrInstallJdk(null));
 
 		assertThat(ma, hasItem("--module-path"));
 
@@ -199,12 +219,14 @@ class DependencyResolverTest extends BaseTest {
 
 	@Test
 	void testImportPOM() {
-		List<String> deps = Arrays.asList("com.microsoft.azure:azure-bom:1.0.0.M1@pom", "com.microsoft.azure:azure");
+
+		List<String> deps = Arrays.asList("org.slf4j:slf4j-bom:2.0.17@pom", "org.slf4j:slf4j-api");
 
 		ModularClassPath classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false,
-				true);
+				false,
+				true, false);
 
-		assertEquals(62, classpath.getArtifacts().size());
+		assertEquals(1, classpath.getArtifacts().size());
 	}
 
 	@Test
@@ -218,30 +240,31 @@ class DependencyResolverTest extends BaseTest {
 				"org.slf4j:slf4j-simple:1.7.30");
 
 		ModularClassPath classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false,
-				true);
+				false,
+				true, false);
 
 		Optional<ArtifactInfo> coord = classpath.getArtifacts()
-												.stream()
-												.filter(ai -> ai.getCoordinate()
-																.toCanonicalForm()
-																.startsWith("io.vertx:vertx-core"))
-												.findFirst();
+			.stream()
+			.filter(ai -> ai.getCoordinate()
+				.toCanonicalForm()
+				.startsWith("io.vertx:vertx-core"))
+			.findFirst();
 
 		assertEquals("4.2.3", coord.get().getCoordinate().getVersion());
 
-		coord = classpath	.getArtifacts()
-							.stream()
-							.filter(ai -> ai.getCoordinate().toCanonicalForm().startsWith("org.slf4j:slf4j-simple:"))
-							.findFirst();
+		coord = classpath.getArtifacts()
+			.stream()
+			.filter(ai -> ai.getCoordinate().toCanonicalForm().startsWith("org.slf4j:slf4j-simple:"))
+			.findFirst();
 
 		assertEquals("1.7.30", coord.get().getCoordinate().getVersion());
 
-		coord = classpath	.getArtifacts()
-							.stream()
-							.filter(ai -> ai.getCoordinate()
-											.toCanonicalForm()
-											.startsWith("org.apache.camel:camel-vertx"))
-							.findFirst();
+		coord = classpath.getArtifacts()
+			.stream()
+			.filter(ai -> ai.getCoordinate()
+				.toCanonicalForm()
+				.startsWith("org.apache.camel:camel-vertx"))
+			.findFirst();
 
 		assertEquals(coord.get().getCoordinate().getVersion(), "3.9.0");
 
@@ -250,12 +273,12 @@ class DependencyResolverTest extends BaseTest {
 				"org.apache.camel:camel-core",
 				"org.apache.camel:camel-vertx",
 				"org.slf4j:slf4j-simple:1.7.30");
-		classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false, true);
+		classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false, false, true, false);
 
-		coord = classpath	.getArtifacts()
-							.stream()
-							.filter(ai -> ai.getCoordinate().toCanonicalForm().startsWith("io.vertx:vertx-core"))
-							.findFirst();
+		coord = classpath.getArtifacts()
+			.stream()
+			.filter(ai -> ai.getCoordinate().toCanonicalForm().startsWith("io.vertx:vertx-core"))
+			.findFirst();
 
 		assertEquals("3.9.5", coord.get().getCoordinate().getVersion());
 	}
@@ -265,7 +288,8 @@ class DependencyResolverTest extends BaseTest {
 		List<String> deps = Arrays.asList("org.infinispan:infinispan-commons:13.0.5.Final@test-jar");
 
 		ModularClassPath classpath = DependencyUtil.resolveDependencies(deps, Collections.emptyList(), false, false,
-				true);
+				false,
+				true, false);
 
 		assertThat(classpath.getArtifacts(), hasSize(7));
 		ArtifactInfo ai = classpath.getArtifacts().get(0);

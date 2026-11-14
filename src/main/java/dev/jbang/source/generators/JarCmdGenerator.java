@@ -1,27 +1,52 @@
 package dev.jbang.source.generators;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import dev.jbang.ExitException;
 import dev.jbang.Settings;
-import dev.jbang.cli.BaseCommand;
-import dev.jbang.cli.ExitException;
-import dev.jbang.source.*;
+import dev.jbang.devkitman.Jdk;
+import dev.jbang.source.BuildContext;
+import dev.jbang.source.MainClassScanner;
+import dev.jbang.source.Project;
 import dev.jbang.util.CommandBuffer;
+import dev.jbang.util.Glob;
 import dev.jbang.util.JavaUtil;
+import dev.jbang.util.ModuleUtil;
 import dev.jbang.util.Util;
 
 public class JarCmdGenerator extends BaseCmdGenerator<JarCmdGenerator> {
-	private final Project project;
-
+	private List<String> runtimeOptions = Collections.emptyList();
 	private boolean assertions;
 	private boolean systemAssertions;
 	private boolean classDataSharing;
+	private String mainClass;
 	private boolean mainRequired;
+	private String moduleName;
+
+	public JarCmdGenerator runtimeOptions(List<String> runtimeOptions) {
+		if (runtimeOptions != null) {
+			this.runtimeOptions = runtimeOptions;
+		} else {
+			this.runtimeOptions = Collections.emptyList();
+		}
+		return this;
+	}
 
 	public JarCmdGenerator assertions(boolean assertions) {
 		this.assertions = assertions;
@@ -38,36 +63,100 @@ public class JarCmdGenerator extends BaseCmdGenerator<JarCmdGenerator> {
 		return this;
 	}
 
+	public JarCmdGenerator mainClass(String mainClass) {
+		this.mainClass = mainClass;
+		return this;
+	}
+
 	public JarCmdGenerator mainRequired(boolean mainRequired) {
 		this.mainRequired = mainRequired;
 		return this;
 	}
 
-	public JarCmdGenerator(Project prj) {
-		this.project = prj;
+	public JarCmdGenerator moduleName(String moduleName) {
+		this.moduleName = moduleName;
+		return this;
 	}
 
-	@Override
-	protected Project getProject() {
-		return project;
+	public JarCmdGenerator(BuildContext ctx) {
+		super(ctx);
 	}
 
 	@Override
 	protected List<String> generateCommandLineList() throws IOException {
 		List<String> fullArgs = new ArrayList<>();
 
-		String classpath = project.resolveClassPath().getClassPath();
+		Project project = ctx.getProject();
+		boolean runAsModule = moduleName != null && project.getModuleName().isPresent();
+		String classpath = ctx.resolveClassPath().getClassPath();
 
 		List<String> optionalArgs = new ArrayList<>();
 
-		String requestedJavaVersion = project.getJavaVersion();
-		String javacmd = JavaUtil.resolveInJavaHome("java", requestedJavaVersion);
+		Jdk jdk = project.projectJdk();
+		String javacmd = JavaUtil.resolveInJavaHome("java", jdk);
+
+		if (jdk.majorVersion() >= 9) {
+			addAllUnnamedManifestOptions(optionalArgs, project.getManifestAttributes().get(Project.ATTR_ADD_OPENS),
+					"--add-opens=");
+			addAllUnnamedManifestOptions(optionalArgs, project.getManifestAttributes().get(Project.ATTR_ADD_EXPORTS),
+					"--add-exports=");
+		}
+
+		if (jdk.majorVersion() >= 22) {
+			addManifestOptions(optionalArgs,
+					project.getManifestAttributes().get(Project.ATTR_ENABLE_NATIVE_ACCESS),
+					"--enable-native-access=");
+		}
 
 		addPropertyFlags(project.getProperties(), "-D", optionalArgs);
 
 		if (debugString != null) {
+			Map<String, String> fallbackDebug = new LinkedHashMap<>();
+			fallbackDebug.put("transport", "dt_socket");
+			fallbackDebug.put("server", "y");
+			fallbackDebug.put("suspend", "y");
+			fallbackDebug.put("address", "4004");
+			// needed even though there is a fallbackvalue as user might have set some other
+			// key/value
+			// i.e. --debug=server=n
+			fallbackDebug.putAll(debugString);
+
+			String address = fallbackDebug.get("address");
+			if (address != null && address.endsWith("?")) {
+				Util.verboseMsg("Checking for available debug port " + address);
+				address = address.substring(0, address.length() - 1);
+				try {
+					// Check if address is just a port number
+					int port = Integer.parseInt(address);
+					int maxAttempts = 10; // Don't try forever
+					int attempts = 0;
+
+					while (attempts < maxAttempts) {
+						Util.verboseMsg("Checking for available debug port" + port + " attempts: " + attempts);
+						try (ServerSocket socket = new ServerSocket(port)) {
+							// Port is available, close socket and use this port
+							socket.close();
+							break;
+						} catch (IOException e) {
+							// Port in use, try a random port between 1024-65535
+							port = 1024 + (int) (Math.random() * 64511);
+							attempts++;
+						}
+					}
+
+					// Update the address with the (potentially) new port
+					fallbackDebug.put("address", String.valueOf(port));
+				} catch (NumberFormatException e) {
+					Util.verboseMsg("Problem parsing " + address + " as a port number", e); // Not just a number, leave
+																							// address as-is
+				}
+			}
+
 			optionalArgs.add(
-					"-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=" + debugString);
+					"-agentlib:jdwp=" + fallbackDebug.entrySet()
+						.stream()
+						.map(e -> e.getKey() + "=" + e.getValue())
+						.collect(Collectors.joining(",")));
 		}
 
 		if (assertions) {
@@ -78,81 +167,160 @@ public class JarCmdGenerator extends BaseCmdGenerator<JarCmdGenerator> {
 			optionalArgs.add("-esa");
 		}
 
+		if (project.enablePreview()) {
+			optionalArgs.add("--enable-preview");
+		}
+
 		if (flightRecorderString != null) {
 			// TODO: find way to generate ~/.jbang/script.jfc to configure flightrecorder to
 			// have 0 ms thresholds
 			String jfropt = "-XX:StartFlightRecording=" + flightRecorderString
-																				.replace("{baseName}",
-																						Util.getBaseName(
-																								project	.getResourceRef()
-																										.getFile()
-																										.toString()));
+				.replace("{baseName}",
+						Util.getBaseName(
+								project.getResourceRef()
+									.getFile()
+									.toString()));
 			optionalArgs.add(jfropt);
 			Util.verboseMsg("Flight recording enabled with:" + jfropt);
 		}
 
-		if (project.getJarFile() != null) {
+		if (ctx.getJarFile() != null) {
 			if (Util.isBlankString(classpath)) {
-				classpath = project.getJarFile().toAbsolutePath().toString();
+				classpath = ctx.getJarFile().toAbsolutePath().toString();
 			} else {
-				classpath = project.getJarFile().toAbsolutePath() + Settings.CP_SEPARATOR + classpath.trim();
+				classpath = ctx.getJarFile().toAbsolutePath() + Settings.CP_SEPARATOR + classpath.trim();
 			}
 		}
 		if (!Util.isBlankString(classpath)) {
-			optionalArgs.add("-classpath");
-			optionalArgs.add(classpath);
+			if (runAsModule) {
+				optionalArgs.addAll(Arrays.asList("-p", classpath));
+			} else {
+				optionalArgs.addAll(Arrays.asList("-classpath", classpath));
+			}
 		}
 
 		if (classDataSharing || project.enableCDS()) {
-			Path cdsJsa = project.getJarFile().toAbsolutePath();
-			if (Files.exists(cdsJsa)) {
-				Util.verboseMsg("CDS: Using shared archive classes from " + cdsJsa);
-				optionalArgs.add("-XX:SharedArchiveFile=" + cdsJsa);
+			if (jdk.majorVersion() >= 13) {
+				Path cdsJsa = ctx.getJsaFile().toAbsolutePath();
+				if (Files.exists(cdsJsa)) {
+					Util.verboseMsg("CDS: Using shared archive classes from " + cdsJsa);
+					optionalArgs.add("-XX:SharedArchiveFile=" + cdsJsa);
+				} else {
+					Util.verboseMsg("CDS: Archiving Classes At Exit at " + cdsJsa);
+					optionalArgs.add("-XX:ArchiveClassesAtExit=" + cdsJsa);
+				}
 			} else {
-				Util.verboseMsg("CDS: Archiving Classes At Exit at " + cdsJsa);
-				optionalArgs.add("-XX:ArchiveClassesAtExit=" + cdsJsa);
+				Util.warnMsg(
+						"ClassDataSharing can only be used on Java versions 13 and later, you are on "
+								+ jdk.majorVersion() + ". Rerun with `--java 13+` to enforce the minimum version");
 			}
 		}
 
 		fullArgs.add(javacmd);
-		addAgentsArgs(fullArgs);
 
 		fullArgs.addAll(project.getRuntimeOptions());
-		fullArgs.addAll(project.resolveClassPath().getAutoDectectedModuleArguments(requestedJavaVersion));
+		fullArgs.addAll(runtimeOptions);
+		fullArgs.addAll(ctx.resolveClassPath().getAutoDectectedModuleArguments(jdk));
 		fullArgs.addAll(optionalArgs);
 
-		String mainClass = project.getMainClass();
-		if (mainClass != null) {
-			fullArgs.add(mainClass);
+		String main = Optional.ofNullable(mainClass).orElse(project.getMainClass());
+		if (main != null && !Glob.isGlob(main)) {
+			if (runAsModule) {
+				String modName = moduleName.isEmpty() ? ModuleUtil.getModuleName(project) : moduleName;
+				fullArgs.add("-m");
+				fullArgs.add(modName + "/" + main);
+			} else {
+				fullArgs.add(main);
+			}
 		} else if (mainRequired) {
-			throw new ExitException(BaseCommand.EXIT_INVALID_INPUT,
-					"no main class deduced, specified nor found in a manifest");
-		}
+			List<String> mains = Collections.emptyList();
+			try {
+				// Iterate all .class files in ctx.getJar and scan for main classes
+				Path jarPath = ctx.getJarFile();
+				if (jarPath != null && Files.exists(jarPath) && Files.isRegularFile(jarPath)) {
+					mains = MainClassScanner.scan(consumer -> {
+						try (JarFile jarFile = new JarFile(jarPath.toFile())) {
+							Enumeration<JarEntry> entries = jarFile.entries();
+							while (entries.hasMoreElements()) {
+								JarEntry entry = entries.nextElement();
+								if (!entry.isDirectory() && entry.getName().endsWith(".class")
+										&& !entry.getName().endsWith("module-info.class")) {
+									try (InputStream is = jarFile.getInputStream(entry)) {
+										consumer.accept(entry.getName(), is);
+									}
+								}
+							}
+						}
+					}).getMainClasses();
+				}
+			} catch (IOException e) {
+				Util.warnMsg("Error indexing jar file: " + e.getMessage());
+			}
 
+			if (mains.isEmpty()) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+						"No main class deduced, specified nor found in a manifest nor jar");
+			} else {
+
+				Stream<String> filteredMains = mains.stream();
+
+				if (Glob.isGlob(main)) {
+					filteredMains = filteredMains
+						.filter(m -> Glob.matches(main, m));
+				}
+
+				String[] mainClassOptions = filteredMains.toArray(String[]::new);
+				int result = Util.askInput(
+						"No main class deduced, specified nor found in a manifest, but found these candidates:",
+						Util.getAskInputTimeout(), 0,
+						mainClassOptions);
+
+				if (result <= 0) {
+					String mainClasses = mains.stream()
+						.map(m -> "\n - " + m)
+						.collect(Collectors.joining());
+					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+							"No main class deduced, specified nor found in a manifest, but found these candidates:\n"
+									+ mainClasses + "\n\nUse -m <main class> to specify a main class.");
+				} else {
+					mainClass = mainClassOptions[result - 1];
+					Util.verboseMsg("User chose main:" + mainClass);
+					fullArgs.add(mainClass);
+				}
+			}
+		}
 		fullArgs.addAll(arguments);
 
 		return fullArgs;
 	}
 
 	protected String generateCommandLineString(List<String> fullArgs) throws IOException {
-		CommandBuffer cb = CommandBuffer.of(fullArgs);
-		String args = cb.asCommandLine(shell);
-		// Check if we can and need to use @-files on Windows
-		boolean useArgsFile = false;
-		if (args.length() > COMMAND_LINE_LENGTH_LIMIT && Util.getShell() != Util.Shell.bash) {
-			// @file is only available from java 9 onwards.
-			String requestedJavaVersion = project.getJavaVersion();
-			int actualVersion = JavaUtil.javaVersion(requestedJavaVersion);
-			useArgsFile = actualVersion >= 9;
+		return CommandBuffer.of(fullArgs)
+			.shell(shell)
+			.applyWindowsMaxCliLimit()
+			.asCommandLine();
+	}
+
+	private static void addAllUnnamedManifestOptions(List<String> result, String manifestValue, String optionPrefix) {
+		if (manifestValue == null) {
+			return;
 		}
-		if (useArgsFile) {
-			return cb.asJavaArgsFile(shell);
-		} else {
-			return args;
+		Arrays.stream(manifestValue.trim().split("\\s+"))
+			.filter(val -> !val.isEmpty())
+			.forEach(val -> result.add(optionPrefix + val + "=ALL-UNNAMED"));
+	}
+
+	private static void addManifestOptions(List<String> result, String manifestValue, String optionPrefix) {
+		if (manifestValue == null) {
+			return;
 		}
+		Arrays.stream(manifestValue.trim().split("\\s+"))
+			.filter(val -> !val.isEmpty())
+			.forEach(val -> result.add(optionPrefix + val));
 	}
 
 	private static void addPropertyFlags(Map<String, String> properties, String def, List<String> result) {
 		properties.forEach((k, e) -> result.add(def + k + "=" + e));
 	}
+
 }

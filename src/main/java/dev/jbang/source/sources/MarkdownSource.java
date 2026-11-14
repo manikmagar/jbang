@@ -6,17 +6,31 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import dev.jbang.cli.BaseCommand;
-import dev.jbang.cli.ExitException;
-import dev.jbang.source.ResourceRef;
+import org.jspecify.annotations.NonNull;
+
+import dev.jbang.ExitException;
+import dev.jbang.resources.ResourceRef;
+import dev.jbang.resources.resolvers.LiteralScriptResourceResolver;
+import dev.jbang.source.BuildContext;
+import dev.jbang.source.Builder;
+import dev.jbang.source.CmdGeneratorBuilder;
 import dev.jbang.source.Source;
-import dev.jbang.source.resolvers.LiteralScriptResourceResolver;
 import dev.jbang.util.Util;
 
 public class MarkdownSource extends JshSource {
 
 	protected MarkdownSource(ResourceRef ref, String script, Function<String, String> replaceProperties) {
 		super(ref, script, replaceProperties);
+	}
+
+	@Override
+	public @NonNull Type getType() {
+		return Type.markdown;
+	}
+
+	@Override
+	public Builder<CmdGeneratorBuilder> getBuilder(BuildContext ctx) {
+		return ctx.getProject().isJShell() ? super.getBuilder(ctx) : new JavaAppBuilder(ctx);
 	}
 
 	public static Source create(ResourceRef resourceRef, Function<String, String> replaceProperties) {
@@ -27,9 +41,9 @@ public class MarkdownSource extends JshSource {
 			// have the transformed script stored
 			// separately from the possibly originally cached file.
 			resourceRef = LiteralScriptResourceResolver.stringToResourceRef(resourceRef.getOriginalResource(),
-					scriptText);
+					scriptText, null);
 		} catch (IOException e) {
-			throw new ExitException(BaseCommand.EXIT_UNEXPECTED_STATE,
+			throw new ExitException(ExitException.EXIT_UNEXPECTED_STATE,
 					"Could not cache script from markdown at " + resourceRef.getOriginalResource(), e);
 		}
 		return new MarkdownSource(resourceRef,
@@ -52,7 +66,7 @@ public class MarkdownSource extends JshSource {
 			List<String> output = new ArrayList<>();
 			String state = "root";
 			boolean prevLineIsEmpty = true;
-			for (String line : source.split("\n")) {
+			for (String line : source.split("\\R")) {
 				switch (state) {
 				case "root":
 					if (match(fourspacesOrTab, line) && prevLineIsEmpty) {

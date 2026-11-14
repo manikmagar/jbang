@@ -1,75 +1,63 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-app-setup(1)
+= JBANG APP SETUP
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang app setup -- Make jbang commands available for the user.
 
-jbang-app-setup - Make jbang commands available for the user.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang app setup [OPTIONS]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Adds the folder holding installed commands to your PATH (and optionally jbang's
+Java) by updating your shell setup. Open a new shell afterwards.
 
-*jbang app setup* *-o* [*-h*] [*--force*] *--fresh* [*--[no-]java*] *--quiet* *--verbose*
-                [*--config*=_<config>_]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang app setup
+jbang app setup --java
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Make jbang commands available for the user.
-
-// end::picocli-generated-man-section-description[]
-
-// tag::picocli-generated-man-section-options[]
-== Options
-
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
-
-*--force*::
-  Force setup to be performed even when existing configuration has been detected
-
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
-
-*-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
+== OPTIONS
 
 *--[no-]java*::
-  Add JBang's Java to the user's environment as well
+Add JBang's Java to the user's environment as well
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--force*::
+Force setup to be performed even when existing configuration has been detected
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*-h*, *--help*::
+Display this help and exit
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-// end::picocli-generated-man-section-options[]
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// end::picocli-generated-full-manpage[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
+
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
+
+*--no-netrc*::
+Disable .netrc authentication lookup.
+

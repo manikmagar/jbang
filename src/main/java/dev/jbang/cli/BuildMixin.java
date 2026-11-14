@@ -1,29 +1,72 @@
 package dev.jbang.cli;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-import picocli.CommandLine;
+import org.aesh.command.option.Mixin;
+import org.aesh.command.option.Option;
+import org.aesh.command.option.OptionGroup;
+import org.aesh.command.option.OptionList;
 
 public class BuildMixin {
+
+	@Mixin
+	public JdkProvidersMixin jdkMixin;
+
+	@Option(shortName = 'j', name = "java", validator = JavaVersionValidator.class, helpGroup = "JDK options", description = "JDK version to use for running the script.")
 	public String javaVersion;
 
-	@CommandLine.Option(names = { "-j",
-			"--java" }, description = "JDK version to use for running the script.")
-	void setJavaVersion(String javaVersion) {
-		if (!javaVersion.matches("\\d+[+]?")) {
-			throw new IllegalArgumentException(
-					"Invalid version, should be a number optionally followed by a plus sign");
-		}
-		this.javaVersion = javaVersion;
-	}
+	@Option(shortName = 'm', name = "main", helpGroup = "Build options", description = "Main class to use when running. Used primarily for running jar's. Can be a glob pattern using ? and *.")
+	public String main;
 
-	@CommandLine.Option(names = { "-m",
-			"--main" }, description = "Main class to use when running. Used primarily for running jar's.")
-	String main;
+	@Option(name = "module", fallbackValue = "", helpGroup = "Build options", description = "Treat resource as a module. Optionally with the given module name")
+	public String module;
 
-	@CommandLine.Option(names = { "-C", "--compile-option" }, description = "Options to pass to the compiler")
+	@OptionList(shortName = 'C', name = "compile-option", helpGroup = "Build options", description = "Options to pass to the compiler")
 	public List<String> compileOptions;
 
-	@CommandLine.Option(names = { "-N", "--native-option" }, description = "Options to pass to the native image tool")
-	public List<String> nativeOptions;
+	@OptionGroup(name = "manifest", helpGroup = "Build options", description = "Add entry to the JAR manifest (e.g. --manifest=Main-Class=com.example.Main)")
+	public Map<String, String> manifestOptions;
+
+	@Option(name = "integrations", hasValue = false, negatable = true, helpGroup = "Build options", description = "Enable or disable integration execution (default: true)")
+	Boolean integrations;
+
+	public Boolean getIntegrations() {
+		return integrations;
+	}
+
+	public List<String> opts() {
+		List<String> opts = new ArrayList<>();
+		if (javaVersion != null) {
+			opts.add("--java");
+			opts.add(javaVersion);
+		}
+		if (main != null) {
+			opts.add("--main");
+			opts.add(main);
+		}
+		if (module != null) {
+			opts.add("--module");
+			opts.add(module);
+		}
+		if (Boolean.TRUE.equals(getIntegrations())) {
+			opts.add("--integrations");
+		} else if (Boolean.FALSE.equals(getIntegrations())) {
+			opts.add("--no-integrations");
+		}
+		if (compileOptions != null) {
+			for (String c : compileOptions) {
+				opts.add("-C");
+				opts.add(c);
+			}
+		}
+		if (manifestOptions != null) {
+			for (Map.Entry<String, String> e : manifestOptions.entrySet()) {
+				opts.add("--manifest");
+				opts.add(e.getKey() + "=" + e.getValue());
+			}
+		}
+		return opts;
+	}
 }

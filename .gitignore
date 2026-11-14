@@ -12,7 +12,6 @@ bin
 homebrew-tap
 RESULTS
 *.db
-jbang-action
 out
 node_modules
 package-lock.json
@@ -20,3 +19,14 @@ package-lock.json
 itests/hello.java
 *.class
 CHANGELOG.md
+allure-report
+allure-results
+.allure
+.DS_Store
+.env
+assets/
+.cachebro/
+CLAUDE.md
+PLAN-*.md
+.pi/
+.specs/

@@ -1,82 +1,70 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-jdk(1)
+= JBANG JDK
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang jdk -- Manage Java Development Kits installed by jbang.
 
-jbang-jdk - Manage Java Development Kits installed by jbang.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang jdk [OPTIONS] [COMMAND]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Installs and manages the JDKs jbang uses. JDKs are normally fetched on demand
+when a script needs one; use these commands to pre-install versions, pick the
+default, or point other tools at a jbang-managed JDK.
 
-*jbang jdk* *-o* *--fresh* *--quiet* *--verbose* [COMMAND]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang jdk install 21
+jbang jdk list
+jbang jdk default 21
+jbang jdk home 21
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Manage Java Development Kits installed by jbang.
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-commands[]
-== Commands
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-xref:jbang-jdk-default.adoc[*default*]::
-  Sets the default JDK to be used by JBang.
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-xref:jbang-jdk-home.adoc[*home*]::
-  Prints the folder where the given JDK is installed.
+== COMMANDS
 
-xref:jbang-jdk-install.adoc[*install*]::
-  Installs a JDK.
+* xref:jbang:cli:jbang-jdk-install.adoc[*install*] - Installs a JDK.
+* xref:jbang:cli:jbang-jdk-list.adoc[*list*] - Lists installed JDKs.
+* xref:jbang:cli:jbang-jdk-uninstall.adoc[*uninstall*] - Uninstalls an existing JDK.
+* xref:jbang:cli:jbang-jdk-home.adoc[*home*] - Prints the folder where the given JDK is installed.
+* xref:jbang:cli:jbang-jdk-java-env.adoc[*java-env*] - Prints out the environment variables needed to use the given JDK.
+* xref:jbang:cli:jbang-jdk-exec.adoc[*exec*] - Executes the given command using the default (or specified) JDK.
+* xref:jbang:cli:jbang-jdk-default.adoc[*default*] - Sets the default JDK to be used by JBang.
 
-xref:jbang-jdk-java-env.adoc[*java-env*]::
-  Prints out the environment variables needed to use the given JDK.
-
-xref:jbang-jdk-list.adoc[*list*]::
-  Lists installed JDKs.
-
-xref:jbang-jdk-uninstall.adoc[*uninstall*]::
-  Uninstalls an existing JDK.
-
-// end::picocli-generated-man-section-commands[]
-
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

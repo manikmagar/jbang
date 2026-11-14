@@ -1,70 +1,66 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-info(1)
+= JBANG INFO
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang info -- Provides info about the script for tools (and humans who are tools).
 
-jbang-info - Provides info about the script for tools (and humans who are tools).
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang info [OPTIONS] [COMMAND]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Prints details about a script or application for use by IDEs and other tools:
+resolved dependencies, class path, jar location and documentation.
 
-*jbang info* *-o* *--fresh* *--quiet* *--verbose* [COMMAND]
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang info tools hello.java
+jbang info classpath hello.java
+jbang info jar hello.java
+jbang info docs --open hello.java
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Provides info about the script for tools (and humans who are tools).
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-h*, *--help*::
+Display this help and exit
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-arguments[]
-// end::picocli-generated-man-section-arguments[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-commands[]
-== Commands
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-xref:jbang-info-tools.adoc[*tools*]::
-  Prints a json description usable for tools/IDE's to get classpath and more info for a jbang script/application. Exact format is still quite experimental.
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-xref:jbang-info-classpath.adoc[*classpath*]::
-  Prints classpath used for this application using operating system specific path separation.
+== COMMANDS
 
-// end::picocli-generated-man-section-commands[]
+* xref:jbang:cli:jbang-info-tools.adoc[*tools*] - Prints a json description usable for tools/IDE's to get classpath and more info for a jbang script/application.
+* xref:jbang:cli:jbang-info-classpath.adoc[*classpath*] - Prints class-path used for this application using operating system specific path separation.
+* xref:jbang:cli:jbang-info-jar.adoc[*jar*] - Prints the path to this application's JAR file.
+* xref:jbang:cli:jbang-info-docs.adoc[*docs*] - Open the documentation file in the default browser.
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

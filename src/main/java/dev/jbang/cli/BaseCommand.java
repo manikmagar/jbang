@@ -3,93 +3,108 @@ package dev.jbang.cli;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
-import java.util.concurrent.Callable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.net.ssl.*;
 
+import org.aesh.command.Command;
+import org.aesh.command.CommandLifecycle;
+import org.aesh.command.CommandResult;
+import org.aesh.command.invocation.CommandInvocation;
+import org.aesh.command.option.Option;
+
 import dev.jbang.Configuration;
+import dev.jbang.ExitException;
+import dev.jbang.util.NetUtil;
 import dev.jbang.util.Util;
 
-import picocli.CommandLine;
+public abstract class BaseCommand implements Command<CommandInvocation>, CommandLifecycle, CommandHelpProvider {
 
-public abstract class BaseCommand implements Callable<Integer> {
+	/** @deprecated Use {@link ExitException#EXIT_OK} */
+	public static final int EXIT_OK = ExitException.EXIT_OK;
+	/** @deprecated Use {@link ExitException#EXIT_GENERIC_ERROR} */
+	public static final int EXIT_GENERIC_ERROR = ExitException.EXIT_GENERIC_ERROR;
+	/** @deprecated Use {@link ExitException#EXIT_INVALID_INPUT} */
+	public static final int EXIT_INVALID_INPUT = ExitException.EXIT_INVALID_INPUT;
+	/** @deprecated Use {@link ExitException#EXIT_UNEXPECTED_STATE} */
+	public static final int EXIT_UNEXPECTED_STATE = ExitException.EXIT_UNEXPECTED_STATE;
+	/** @deprecated Use {@link ExitException#EXIT_INTERNAL_ERROR} */
+	public static final int EXIT_INTERNAL_ERROR = ExitException.EXIT_INTERNAL_ERROR;
+	/** @deprecated Use {@link ExitException#EXIT_EXECUTE} */
+	public static final int EXIT_EXECUTE = ExitException.EXIT_EXECUTE;
 
-	public static final int EXIT_OK = 0;
-	public static final int EXIT_GENERIC_ERROR = 1;
-	public static final int EXIT_INVALID_INPUT = 2;
-	public static final int EXIT_UNEXPECTED_STATE = 3;
-	public static final int EXIT_INTERNAL_ERROR = 4;
-	public static final int EXIT_EXECUTE = 255;
-
-	private static final Logger logger = Logger.getLogger("org.jboss.shrinkwrap.resolver");
+	private static final Logger logger = Logger.getLogger("dev.jbang.cli");
 	static {
 		logger.setLevel(Level.SEVERE);
 	}
 
-	@CommandLine.Spec
-	CommandLine.Model.CommandSpec spec;
-
-	@CommandLine.Option(names = { "-h",
-			"--help" }, usageHelp = true, description = "Display help/info. Use 'jbang <command> -h' for detailed usage.")
+	@Option(shortName = 'h', name = "help", hasValue = false, overrideRequired = true, inherited = true, helpGroup = "Global options", description = "Display this help and exit")
 	boolean helpRequested;
 
-	@CommandLine.Option(names = { "--config" }, description = "Path to config file to be used instead of the default")
-	void setConfig(Path config) {
-		if (Files.isReadable(config)) {
-			Configuration.instance(Configuration.get(config));
-		} else {
-			warn("Configuration file does not exist or could not be read: " + config);
-		}
-	}
+	@Option(name = "config", helpGroup = "Global options", description = "Path to config file to be used instead of the default")
+	String configPath;
 
-	@CommandLine.Option(names = { "--insecure" }, description = "Enable insecure trust of all SSL certificates.")
-	void setInsecure(boolean insecure) {
-		if (insecure) {
-			enableInsecure();
-		}
-	}
+	@Option(name = "insecure", hasValue = false, helpGroup = "Global options", description = "Enable insecure trust of all SSL certificates.")
+	boolean insecure;
+
+	@Option(name = "verbose", hasValue = false, negatable = true, inherited = true, helpGroup = "Global options", exclusiveWith = {
+			"quiet" }, description = "jbang will be verbose on what it does.")
+	Boolean verbose;
+
+	@Option(name = "quiet", hasValue = false, negatable = true, inherited = true, helpGroup = "Global options", exclusiveWith = {
+			"verbose" }, description = "jbang will be quiet, only print when error occurs.")
+	Boolean quiet;
+
+	@Option(shortName = 'o', name = "offline", hasValue = false, negatable = true, inherited = true, helpGroup = "Global options", exclusiveWith = {
+			"fresh" }, description = "Work offline. Fail-fast if dependencies are missing.")
+	Boolean offline;
+
+	@Option(name = "fresh", hasValue = false, negatable = true, inherited = true, helpGroup = "Global options", exclusiveWith = {
+			"offline" }, description = "Make sure we use fresh (i.e. non-cached) resources.")
+	Boolean fresh;
+
+	@Option(name = "preview", hasValue = false, negatable = true, inherited = true, description = "Enable jbang preview features", visibility = org.aesh.command.option.OptionVisibility.HIDDEN)
+	Boolean preview;
+
+	@Option(shortName = 'x', name = "stacktrace", hasValue = false, negatable = true, inherited = true, helpGroup = "Global options", description = "Print exceptions stacktraces to stderr (even when quiet).")
+	Boolean printExceptions;
+
+	@Option(name = "netrc", inherited = true, helpGroup = "Global options", exclusiveWith = {
+			"no-netrc" }, description = "Path to a .netrc file for HTTP authentication credentials.")
+	String netrc;
+
+	@Option(name = "no-netrc", hasValue = false, inherited = true, helpGroup = "Global options", exclusiveWith = {
+			"netrc" }, description = "Disable .netrc authentication lookup.")
+	boolean noNetrc;
+
+	protected CommandInvocation commandInvocation;
 
 	void debug(String msg) {
 		if (isVerbose()) {
-			if (spec != null) {
-				spec.commandLine().getErr().println("[jbang] " + msg);
-			} else {
-				Util.verboseMsg(msg);
-			}
+			Util.verboseMsg(msg);
 		}
 	}
 
 	void info(String msg) {
 		if (!isQuiet()) {
-			if (spec != null) {
-				spec.commandLine().getErr().println("[jbang] " + msg);
-			} else {
-				Util.infoMsg(msg);
-			}
+			Util.infoMsg(msg);
 		}
 	}
 
 	void warn(String msg) {
 		if (!isQuiet()) {
-			if (spec != null) {
-				spec.commandLine().getErr().println("[jbang] " + msg);
-			} else {
-				Util.warnMsg(msg);
-			}
+			Util.warnMsg(msg);
 		}
 	}
 
 	void error(String msg, Throwable th) {
-		if (spec != null) {
-			spec.commandLine().getErr().println("[jbang] " + msg);
-		} else {
-			Util.errorMsg(msg, th);
-		}
+		Util.errorMsg(msg, th);
 	}
 
 	boolean isVerbose() {
@@ -118,7 +133,7 @@ public abstract class BaseCommand implements Callable<Integer> {
 
 			// Install the all-trusting trust manager
 			SSLContext sc = SSLContext.getInstance("SSL");
-			sc.init(null, trustAllCerts, new java.security.SecureRandom());
+			sc.init(null, trustAllCerts, new SecureRandom());
 			HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
 
 			// Create all-trusting host name verifier
@@ -132,8 +147,116 @@ public abstract class BaseCommand implements Callable<Integer> {
 	}
 
 	@Override
-	public Integer call() throws IOException {
-		return doCall();
+	public CommandResult execute(CommandInvocation commandInvocation) throws InterruptedException {
+		this.commandInvocation = commandInvocation;
+
+		if (helpRequested) {
+			commandInvocation.println(commandInvocation.getHelpInfo());
+			return CommandResult.valueOf(ExitException.EXIT_OK);
+		}
+
+		try {
+			validateArguments();
+			int exitCode = doCall();
+			return CommandResult.valueOf(exitCode);
+		} catch (ExitException e) {
+			if (e.getStatus() != 0 && e.getMessage() != null) {
+				Util.errorMsg(null, e);
+			}
+			return CommandResult.valueOf(e.getStatus());
+		} catch (IOException e) {
+			Util.errorMsg(null, e);
+			return CommandResult.valueOf(ExitException.EXIT_GENERIC_ERROR);
+		} catch (IllegalArgumentException e) {
+			Util.errorMsg(null, e);
+			return CommandResult.valueOf(ExitException.EXIT_INVALID_INPUT);
+		} catch (Exception e) {
+			Util.errorMsg(null, e);
+			return CommandResult.valueOf(ExitException.EXIT_INTERNAL_ERROR);
+		}
+	}
+
+	protected Integer missingSubcommand() {
+		System.err.println("Missing required subcommand for '" + getClass().getAnnotation(
+				org.aesh.command.CommandDefinition.class)
+			.name() + "'");
+		printCommandHelp();
+		return ExitException.EXIT_INVALID_INPUT;
+	}
+
+	/**
+	 * Validates that the command's minimal argument requirements are met, before
+	 * {@link #doCall()} runs. The default does nothing; override to add checks and
+	 * throw an {@link ExitException} (usually via {@link #requireScriptArgument})
+	 * when a requirement is missing. Failures print the command's usage help.
+	 */
+	protected void validateArguments() {
+	}
+
+	/** Prints this command's usage/help (synopsis, options, etc.) to stderr. */
+	protected void printCommandHelp() {
+		if (commandInvocation != null) {
+			System.err.println(commandInvocation.getHelpInfo());
+		}
+	}
+
+	/**
+	 * Ensures a script/resource argument was provided. When missing, prints the
+	 * command's usage help (like {@code run} does) and throws an
+	 * {@link ExitException} so the error is consistent across commands.
+	 */
+	protected void requireScriptArgument(String scriptOrFile) {
+		if (scriptOrFile == null) {
+			printCommandHelp();
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"Missing required parameter: '<scriptOrFile>'");
+		}
+	}
+
+	@Override
+	public void afterParse() {
+		if (verbose != null) {
+			Util.setVerbose(verbose);
+		}
+		if (quiet != null) {
+			Util.setQuiet(quiet);
+		}
+		if (offline != null) {
+			Util.setOffline(offline);
+		}
+		if (fresh != null) {
+			Util.setFresh(fresh);
+		}
+		if (preview != null) {
+			Util.setPreview(preview);
+		}
+		if (printExceptions != null) {
+			Util.setPrintExceptions(printExceptions);
+		}
+
+		if (configPath != null) {
+			Path config = Paths.get(configPath);
+			if (Files.isReadable(config)) {
+				Configuration.instance(Configuration.get(config));
+			} else {
+				warn("Configuration file does not exist or could not be read: " + config);
+			}
+		}
+
+		if (noNetrc) {
+			NetUtil.setNetrcDisabled(true);
+		} else if (netrc != null) {
+			Path netrcPath = Paths.get(netrc);
+			if (!Files.isReadable(netrcPath)) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+						"Netrc file does not exist or is not readable: " + netrcPath);
+			}
+			NetUtil.setNetrcFile(netrcPath);
+		}
+
+		if (Boolean.TRUE.equals(insecure)) {
+			enableInsecure();
+		}
 	}
 
 	public abstract Integer doCall() throws IOException;

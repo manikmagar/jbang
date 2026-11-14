@@ -1,114 +1,150 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-export-mavenrepo(1)
+= JBANG EXPORT MAVENREPO
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang export mavenrepo -- Exports directory that can be used to publish as a maven repository
 
-jbang-export-mavenrepo - Exports directory that can be used to publish as a maven repository
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang export mavenrepo [OPTIONS] [<scriptOrFile>]
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+Writes the built jar and a generated POM in Maven repository layout, by default
+into your local ~/.m2 repository. Needs a group ID (--group) unless the script
+declares its GAV.
 
-*jbang export mavenrepo* *-o* [*-hn*] [*--force*] *--fresh* [*--insecure*] *--quiet*
-                       *--verbose* [*-a*=_<artifact>_] [*--config*=_<config>_]
-                       [*-g*=_<group>_] [*-j*=_<javaVersion>_] [*-O*=_<outputFile>_]
-                       [*-v*=_<version>_] [*--cp*=_<classpaths>_]...
-                       [*-D*=_<String=String>_]... [*--deps*=_<dependencies>_]...
-                       [*--repos*=_<repositories>_]... _scriptOrFile_
+Examples:
 
-// end::picocli-generated-man-section-synopsis[]
+[source,bash]
+----
+jbang export mavenrepo -g org.acme hello.java
+jbang export mavenrepo -g org.acme -a hello -v 1.0 -O build/repo --force hello.java
+----
 
-// tag::picocli-generated-man-section-description[]
-== Description
 
-Exports directory that can be used to publish as a maven repository
+== OPTIONS
 
-// end::picocli-generated-man-section-description[]
+*-g*, *--group*=<group>::
+The group ID to use for the generated POM.
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*-a*, *--artifact*=<artifact>::
+The artifact ID to use for the generated POM.
 
-*-a*, *--artifact*=_<artifact>_::
-  The artifact ID to use for the generated POM.
+*-v*, *--version*=<version>::
+The version to use for the generated POM.
 
-*--config*=_<config>_::
-  Path to config file to be used instead of the default
-
-*--cp, --class-path*=_<classpaths>_::
-  Add class path entries.
-
-*-D*, _<String=String>_::
-  set a system property
-
-*--deps*=_<dependencies>_::
-  Add additional dependencies (Use commas to separate them).
+*-O*, *--output*=<output>::
+The name or path to use for the exported file.
 
 *--force*::
-  Force export, i.e. overwrite exported file if already exists
+Force export, i.e. overwrite exported file if already exists
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*-s*, *--sources*=<sources>::
+Add additional sources.
 
-*-g*, *--group*=_<group>_::
-  The group ID to use for the generated POM.
+*--files*=<files>::
+Add additional files.
 
-*-h*, *--help*::
-  Display help/info. Use 'jbang <command> -h' for detailed usage.
+*-T*, *--source-type*=<source-type>::
+Force input to be interpreted as the given type. One of: java, jshell, kotlin, groovy, markdown.
 
-*--insecure*::
-  Enable insecure trust of all SSL certificates.
+*--jsh*::
+Force input to be interpreted with jsh/jshell. Deprecated: use '--source-type jshell'
 
-*-j*, *--java*=_<javaVersion>_::
-  JDK version to use for running the script.
+*--catalog*=<catalog>::
+Path to catalog file to be used instead of the default
+
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
+
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
+
+*-j*, *--java*=<java>::
+JDK version to use for running the script.
+
+*-m*, *--main*=<main>::
+Main class to use when running. Used primarily for running jar's. Can be a glob pattern using ? and *.
+
+*--module*=<module>::
+Treat resource as a module. Optionally with the given module name
+
+*-C*, *--compile-option*=<compile-option>::
+Options to pass to the compiler
+
+*--manifest*=<key>=<value>::
+Add entry to the JAR manifest (e.g. --manifest=Main-Class=com.example.Main)
+
+*--[no-]integrations*::
+Enable or disable integration execution (default: true)
+
+*-D*=<key>=<value>::
+set a system property
++
+Default: `true`
+
+*--deps*=<deps>::
+Add additional dependencies (Use commas to separate them).
+
+*--repos*=<repos>::
+Add additional repositories.
+
+*--cp*=<cp>::
+Add class path entries.
++
+Aliases: `--class-path`
+
+*--ignore-transitive-repositories*::
+Ignore remote repositories found in transitive dependencies
++
+Aliases: `--itr`
 
 *-n*, *--native*::
-  Build using native-image
+Build using native-image
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*-N*, *--native-option*=<native-option>::
+Options to pass to the native image tool
 
-*-O*, *--output*=_<outputFile>_::
-  The name or path to use for the exported file. If not specified a name will be determined from the original source reference and export flags.
+*--build-dir*=<build-dir>::
+Use given directory for build results
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--enable-preview*::
+Activate Java preview features
 
-*--repos*=_<repositories>_::
-  Add additional repositories.
+*-h*, *--help*::
+Display this help and exit
 
-*-v*, *--version*=_<version>_::
-  The version to use for the generated POM.
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// end::picocli-generated-man-section-options[]
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-_scriptOrFile_::
-  A file or URL to a Java code file
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-// end::picocli-generated-man-section-arguments[]
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-// end::picocli-generated-full-manpage[]
+== ARGUMENTS
+
+*<scriptOrFile>*::
+A file or URL to a Java code file
+

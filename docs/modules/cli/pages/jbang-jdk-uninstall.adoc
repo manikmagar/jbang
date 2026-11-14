@@ -1,67 +1,56 @@
-// This is a generated documentation file based on picocli
-// To change it update the picocli code or the genrator
-// tag::picocli-generated-full-manpage[]
-// tag::picocli-generated-man-section-header[]
-:doctype: manpage
-:manmanual: jbang Manual
-:man-linkstyle: pass:[blue R < >]
-= jbang-jdk-uninstall(1)
+= JBANG JDK UNINSTALL
 
-// end::picocli-generated-man-section-header[]
+== NAME
 
-// tag::picocli-generated-man-section-name[]
-== Name
+jbang jdk uninstall -- Uninstalls an existing JDK.
 
-jbang-jdk-uninstall - Uninstalls an existing JDK.
+== SYNOPSIS
 
-// end::picocli-generated-man-section-name[]
+[source]
+----
+jbang jdk uninstall [OPTIONS] <versionOrId>
+----
 
-// tag::picocli-generated-man-section-synopsis[]
-== Synopsis
+== OPTIONS
 
-*jbang jdk uninstall* *-o* *--fresh* *--quiet* *--verbose* _version_
+*--jdk-providers*=<jdk-providers>::
+Use the given providers to manage JDKs
 
-// end::picocli-generated-man-section-synopsis[]
+*--jdk-distros*=<jdk-distros>::
+Use the given distributions to install new JDKs
 
-// tag::picocli-generated-man-section-description[]
-== Description
+*-h*, *--help*::
+Display this help and exit
 
-Uninstalls an existing JDK.
+*--config*=<config>::
+Path to config file to be used instead of the default
 
-// end::picocli-generated-man-section-description[]
+*--insecure*::
+Enable insecure trust of all SSL certificates.
 
-// tag::picocli-generated-man-section-options[]
-== Options
+*--[no-]verbose*::
+jbang will be verbose on what it does.
 
-*--fresh*::
-  Make sure we use fresh (i.e. non-cached) resources.
+*--[no-]quiet*::
+jbang will be quiet, only print when error occurs.
 
-*-o*, *--offline*::
-  Work offline. Fail-fast if dependencies are missing. No connections will be attempted
+*-o*, *--[no-]offline*::
+Work offline. Fail-fast if dependencies are missing.
 
-*--quiet*::
-  jbang will be quiet, only print when error occurs.
+*--[no-]fresh*::
+Make sure we use fresh (i.e. non-cached) resources.
 
-*--verbose*::
-  jbang will be verbose on what it does.
+*-x*, *--[no-]stacktrace*::
+Print exceptions stacktraces to stderr (even when quiet).
 
-// end::picocli-generated-man-section-options[]
+*--netrc*=<netrc>::
+Path to a .netrc file for HTTP authentication credentials.
 
-// tag::picocli-generated-man-section-arguments[]
-== Arguments
+*--no-netrc*::
+Disable .netrc authentication lookup.
 
-_version_::
-  The version to install
+== ARGUMENTS
 
-// end::picocli-generated-man-section-arguments[]
+*<versionOrId>*::
+The version to uninstall
 
-// tag::picocli-generated-man-section-commands[]
-// end::picocli-generated-man-section-commands[]
-
-// tag::picocli-generated-man-section-exit-status[]
-// end::picocli-generated-man-section-exit-status[]
-
-// tag::picocli-generated-man-section-footer[]
-// end::picocli-generated-man-section-footer[]
-
-// end::picocli-generated-full-manpage[]

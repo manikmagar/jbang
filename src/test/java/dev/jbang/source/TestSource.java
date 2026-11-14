@@ -15,13 +15,19 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.jbang.BaseTest;
 import dev.jbang.net.TrustedSources;
+import dev.jbang.resources.ResourceRef;
+import dev.jbang.source.sources.GroovySource;
 import dev.jbang.source.sources.JavaSource;
+import dev.jbang.source.sources.KotlinSource;
 import dev.jbang.util.PropertiesValueResolver;
+
+import io.qameta.allure.Issue;
 
 public class TestSource extends BaseTest {
 
@@ -151,10 +157,32 @@ public class TestSource extends BaseTest {
 			"public class test {" +
 			"}";
 
+	String groovyExample = "///usr/bin/env jbang \"$0\" \"$@\" ; exit $?\n" +
+			"//DEPS info.picocli:picocli:4.6.3\n" +
+			"\n" +
+			"//RUNTIME_OPTIONS --enable-preview \"-Dvalue='this is space'\"\n" +
+			"//JAVA_OPTIONS --enable-preview\n" +
+			"//COMPILE_OPTIONS --enable-preview\n" +
+			"//NATIVE_OPTIONS -O1\n" +
+			"\n" +
+			"println(\"Hello World\");\n";
+
+	String kotlinExample = "///usr/bin/env jbang \"$0\" \"$@\" ; exit $?\n" +
+			"//DEPS info.picocli:picocli:4.6.3\n" +
+			"\n" +
+			"//RUNTIME_OPTIONS --enable-preview \"-Dvalue='this is space'\"\n" +
+			"//JAVA_OPTIONS --enable-preview\n" +
+			"//COMPILE_OPTIONS --enable-preview\n" +
+			"//NATIVE_OPTIONS -O1\n" +
+			"\n" +
+			"public fun main() {\n" +
+			"    println(\"Hello World\");\n" +
+			"}\n";
+
 	@Test
 	void testCommentsDoesNotGetPickedUp() {
-		Source source = new JavaSource(exampleCommandsWithComments, null);
-		Project prj = source.createProject();
+		Source source = new JavaSource(ResourceRef.forLiteral(exampleCommandsWithComments), null);
+		Project prj = Project.builder().build(source);
 
 		assertEquals(prj.getJavaVersion(), "14+");
 
@@ -165,9 +193,9 @@ public class TestSource extends BaseTest {
 
 	@Test
 	void testFindDependencies() {
-		Source src = new JavaSource(example,
+		Source src = new JavaSource(ResourceRef.forLiteral(example),
 				it -> PropertiesValueResolver.replaceProperties(it, new Properties()));
-		Project prj = src.createProject();
+		Project prj = Project.builder().build(src);
 
 		List<String> deps = prj.getMainSourceSet().getDependencies();
 		assertEquals(2, deps.size());
@@ -178,13 +206,28 @@ public class TestSource extends BaseTest {
 	}
 
 	@Test
+	@Issue("https://github.com/jbangdev/jbang/issues/2330")
+	@Disabled("Disabled until #2330 is fixed")
+	void testFindBrokenListDependencies() {
+		Source src = new JavaSource(ResourceRef.forLiteral("//DEPS com.offbytwo:docopt:0.6.0.20150202,mac"),
+				it -> PropertiesValueResolver.replaceProperties(it, new Properties()));
+		Project prj = Project.builder().build(src); // NPE's atm.
+
+		List<String> deps = prj.getMainSourceSet().getDependencies();
+		assertEquals(1, deps.size());
+		// not sure what to expect - most likely a build error.
+
+	}
+
+	@Test
 	void testFindDependenciesWithProperty() {
 
 		Properties p = new Properties();
 		p.put("log4j.version", "1.2.9");
 
-		Source src = new JavaSource(example, it -> PropertiesValueResolver.replaceProperties(it, p));
-		Project prj = src.createProject();
+		Source src = new JavaSource(ResourceRef.forLiteral(example),
+				it -> PropertiesValueResolver.replaceProperties(it, p));
+		Project prj = Project.builder().build(src);
 
 		List<String> dependencies = prj.getMainSourceSet().getDependencies();
 		assertEquals(2, dependencies.size());
@@ -201,7 +244,7 @@ public class TestSource extends BaseTest {
 		createTmpFileWithContent("pkg1", "Hello.java", exampleURLInsourceHello);
 		createTmpFileWithContent("pkg1", "Bye.java", exampleURLInsourceBye);
 		String scriptURL = mainPath.toString();
-		ProjectBuilder pb = ProjectBuilder.create();
+		ProjectBuilder pb = Project.builder();
 		Project prj = pb.build(scriptURL);
 		assertEquals(8, prj.getMainSourceSet().getSources().size());
 	}
@@ -249,7 +292,7 @@ public class TestSource extends BaseTest {
 		try {
 			TrustedSources.instance().add(url, tempFile);
 
-			ProjectBuilder pb = ProjectBuilder.create();
+			ProjectBuilder pb = Project.builder();
 			Project prj = pb.build(url);
 			assertEquals(3, prj.getMainSourceSet().getSources().size());
 			boolean foundmain = false;
@@ -272,21 +315,41 @@ public class TestSource extends BaseTest {
 
 	@Test
 	void testCDS() {
-		Source source = new JavaSource("//CDS\nclass m { }", null);
-		Source source2 = new JavaSource("class m { }", null);
+		Source source = new JavaSource(ResourceRef.forLiteral("//CDS\nclass m { }"), null);
+		Source source2 = new JavaSource(ResourceRef.forLiteral("class m { }"), null);
 
 		assertTrue(source.enableCDS());
 		assertFalse(source2.enableCDS());
+	}
+
+	@Test
+	void testExtractJavaOptions() {
+		Source s = new JavaSource(ResourceRef.forLiteral(example), null);
+
+		assertEquals(Arrays.asList("--enable-preview", "--verbose"), s.getCompileOptions());
+		assertEquals(Arrays.asList("-O1"), s.getNativeOptions());
+		assertEquals(Arrays.asList("--enable-preview", "-Dvalue='this is space'", "--enable-preview"),
+				s.getRuntimeOptions());
 
 	}
 
 	@Test
-	void testExtractOptions() {
-		Source s = new JavaSource(example, null);
+	void testExtractGroovyOptions() {
+		Source s = new GroovySource(ResourceRef.forLiteral(groovyExample), null);
 
-		assertEquals(Arrays.asList("-g", "--verbose", "--enable-preview"), s.getCompileOptions());
+		assertEquals(Arrays.asList("--enable-preview"), s.getCompileOptions());
 		assertEquals(Arrays.asList("-O1"), s.getNativeOptions());
-		assertEquals(Arrays.asList("--enable-preview", "--enable-preview", "-Dvalue='this is space'"),
+		assertEquals(Arrays.asList("-Dgroovy.grape.enable=false", "--enable-preview", "-Dvalue='this is space'",
+				"--enable-preview"), s.getRuntimeOptions());
+	}
+
+	@Test
+	void testExtractKotlinOptions() {
+		Source s = new KotlinSource(ResourceRef.forLiteral(kotlinExample), null);
+
+		assertEquals(Arrays.asList("--enable-preview"), s.getCompileOptions());
+		assertEquals(Arrays.asList("-O1"), s.getNativeOptions());
+		assertEquals(Arrays.asList("--enable-preview", "-Dvalue='this is space'", "--enable-preview"),
 				s.getRuntimeOptions());
 
 	}
@@ -295,14 +358,14 @@ public class TestSource extends BaseTest {
 	void testNonJavaExtension(@TempDir Path output) throws IOException {
 		Path p = output.resolve("kube-example");
 		writeString(p, example);
-		ProjectBuilder pb = ProjectBuilder.create();
+		ProjectBuilder pb = Project.builder();
 		pb.build(p.toAbsolutePath().toString());
 	}
 
 	@Test
 	void testGav() {
-		Source src = new JavaSource(example, null);
-		String gav = src.createProject().getGav().get();
+		Source src = new JavaSource(ResourceRef.forLiteral(example), null);
+		String gav = Project.builder().build(src).getGav().get();
 		assertEquals("org.example:classpath", gav);
 	}
 
